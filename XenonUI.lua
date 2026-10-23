@@ -24,7 +24,7 @@ local LocalPlayer = Players.LocalPlayer
 --------------------------------------------------------------------------------
 local T_FAST   = TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 local T_MED    = TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-local T_SLOW   = TweenInfo.new(0.4,  Enum.EasingStyle.Expo, Enum.EasingDirection.Out)
+local T_SLOW   = TweenInfo.new(0.4,  Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
 local T_SPRING = TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 
 --------------------------------------------------------------------------------
@@ -1393,16 +1393,18 @@ function Collapse.new(parent, options)
     self.Panel = panel
     self.Layout = layout
     self.Open = false
+    -- AbsoluteContentSize lives on the layout, not on the frame
+    self._padding = (options.PadY or 10) * 2
     self._extra = options.Extra or 0
 
-    panel:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         if self.Open then
-            wrapper.Size = UDim2.new(1, 0, 0, panel.AbsoluteContentSize.Y + self._extra)
+            wrapper.Size = UDim2.new(1, 0, 0, self:Measure())
         end
     end)
 
     function self:Measure()
-        return panel.AbsoluteContentSize.Y + self._extra
+        return layout.AbsoluteContentSize.Y + self._padding + self._extra
     end
 
     function self:SetOpen(state, instant)
@@ -3473,7 +3475,9 @@ function Tab:AddSection(options)
         column = self.Columns[1]
         local best = nil
         for _, candidate in ipairs(self.Columns) do
-            local score = (candidate._sectionCount or 0) * 100000 + candidate.AbsoluteContentSize.Y
+            local layout = candidate.Layout
+            local height = layout and layout.AbsoluteContentSize.Y or 0
+            local score = (candidate._sectionCount or 0) * 100000 + height
             if not best or score < best then
                 best = score
                 column = candidate
@@ -4484,10 +4488,12 @@ function Tab:BuildColumns(count)
             LayoutOrder = index,
             ZIndex = 14,
         })
-        Util.New("UIListLayout", {
+        local columnLayout = Util.New("UIListLayout", {
             SortOrder = Enum.SortOrder.LayoutOrder,
             Padding = UDim.new(0, 14),
-        }).Parent = columnFrame
+        })
+        columnLayout.Parent = columnFrame
+        columnFrame.Layout = columnLayout
         columnFrame.Parent = self.Page
         self.Columns[index] = columnFrame
     end
