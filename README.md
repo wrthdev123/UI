@@ -4,18 +4,26 @@
 
 ## Файлы
 
-- [`VantaUI.lua`](VantaUI.lua) — самодостаточная библиотека, оформляется как **ModuleScript**.
-- [`Example.client.lua`](Example.client.lua) — готовый **LocalScript** с пятью категориями и всеми основными компонентами.
+- [`VantaUI.lua`](VantaUI.lua) — самодостаточная библиотека для подключения через `require` как **ModuleScript**.
+- [`Example.client.lua`](Example.client.lua) — **полностью автономный LocalScript**: библиотека уже встроена в файл, поэтому для демо нужен только он.
 
-## Установка
+## Быстрый запуск демо
 
-1. В Roblox Studio создайте `ModuleScript` в `ReplicatedStorage`, назовите его `VantaUI` и вставьте содержимое `VantaUI.lua`.
-2. Создайте `LocalScript` в `StarterPlayer > StarterPlayerScripts` и вставьте содержимое `Example.client.lua`.
-3. Запустите игру. `Right Shift` скрывает и снова показывает интерфейс.
+1. В Roblox Studio создайте `LocalScript` в `StarterPlayer > StarterPlayerScripts`.
+2. Вставьте в него **весь** `Example.client.lua`. Отдельно копировать `VantaUI.lua` и создавать `ModuleScript` для этого варианта не нужно.
+3. Нажмите **Play / Play Solo**, а не серверный режим **Run**.
+4. После появления интерфейса используйте `Right Shift`, чтобы скрыть или снова показать его.
+
+В `Output` должны появиться сообщения `[VantaUI] Example is starting...` и `[VantaUI] Example ready...`.
+
+## Подключение библиотеки к своему проекту
+
+1. Создайте `ModuleScript` в `ReplicatedStorage`, назовите его `VantaUI` и вставьте содержимое `VantaUI.lua`.
+2. Подключите модуль из своего LocalScript-а через `require`, как показано ниже.
 
 Библиотека использует только обычные Roblox API. Не нужны executor-функции, HTTP-запросы, asset ID или дополнительные зависимости.
 
-## Минимальный пример
+## Минимальный модульный пример
 
 ```lua
 local ReplicatedStorage = game:GetService("ReplicatedStorage")

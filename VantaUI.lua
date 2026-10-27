@@ -172,7 +172,7 @@ local function makeChevron(parent, color, size)
 end
 
 local function keyName(key)
-    if not key or key == Enum.KeyCode.Unknown then
+    if not key or key == Enum.KeyCode.None then
         return "None"
     end
     local aliases = {
@@ -1152,7 +1152,7 @@ function Container:AddKeybind(options)
     options.Title = options.Title or options.Name or "Keybind"
     local theme = self.Window.Theme
     local component = createItem(self, options)
-    local value = options.Default or Enum.KeyCode.Unknown
+    local value = options.Default or Enum.KeyCode.None
     local listeningForKey = false
 
     local keyBox = create("Frame", {
@@ -1192,7 +1192,7 @@ function Container:AddKeybind(options)
 
     local function set(newKey, notify)
         local changed = value ~= newKey
-        value = newKey or Enum.KeyCode.Unknown
+        value = newKey or Enum.KeyCode.None
         label.Text = keyName(value)
         if notify and changed then
             safeCallback(options.Changed, value)
@@ -1207,11 +1207,11 @@ function Container:AddKeybind(options)
                 return
             end
             if input.KeyCode == Enum.KeyCode.Backspace then
-                set(Enum.KeyCode.Unknown, true)
+                set(Enum.KeyCode.None, true)
                 stopListening()
                 return
             end
-            if input.KeyCode ~= Enum.KeyCode.Unknown then
+            if input.KeyCode ~= Enum.KeyCode.None then
                 set(input.KeyCode, true)
                 stopListening()
             end
@@ -1221,7 +1221,7 @@ function Container:AddKeybind(options)
         if gameProcessed or component.Window._capturing or UserInputService:GetFocusedTextBox() then
             return
         end
-        if value ~= Enum.KeyCode.Unknown and input.KeyCode == value then
+        if value ~= Enum.KeyCode.None and input.KeyCode == value then
             safeCallback(options.Callback, value)
         end
     end)
