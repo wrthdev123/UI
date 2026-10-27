@@ -1,6 +1,6 @@
-# VantaUI 3.0
+# VantaUI 3.1
 
-A self-contained Roblox Luau interface library for **five independent, draggable columns** with inline settings. The dark-violet presentation uses flat rows, thin borders, readable BuilderSans typography and genuine Lucide sprite icons — without a full-window wrapper or a vertical selected-state strip.
+A self-contained Roblox Luau interface library for **five independent, draggable columns** with inline settings. The dark-violet presentation uses separated rows, thin borders, readable BuilderSans typography and genuine Lucide sprite icons — without a full-window wrapper or a vertical selected-state strip.
 
 `Example.client.lua` contains the **complete library and a five-column demo in one LocalScript**. It needs no ModuleScript, asset upload, package manager or additional file.
 
@@ -9,11 +9,14 @@ A self-contained Roblox Luau interface library for **five independent, draggable
 - Five separate `CanvasGroup` panels; each can be dragged independently.
 - **Local blur behind the columns only** — no fullscreen `BlurEffect`.
 - Exact critically damped drag motion with distinct pickup, movement and release states; no spring overshoot.
-- Separated 34 px rows with 6 px corners, 8 px panel corners, 46 px descriptive rows and 13 px labels.
-- Inline settings push following rows down in the same column.
-- 14 Roblox-hosted Lucide mappings, with BuilderSans UI fonts.
+- Larger 230 px columns, 36 px rows, 15 px headings and a 400 px default minimum column height.
+- Separated rows with 6 px corners and panels with 8 px corners.
+- Configurable `Parallax`, bouncing `Particles`, `Image` or `None` background modes.
+- Hover descriptions appear in a large 17 px card at the bottom of the screen.
+- Inline settings use 7 px spacing and push following rows down in the same column.
+- Roblox-hosted Lucide mappings, with BuilderSans UI fonts.
 - Toggle, slider, dropdown, keybind, textbox, color picker, button, label, separator and notification APIs.
-- Config flags, `GetFlag`, `SetFlag`, programmatic setters and automatic theme-color tracking.
+- Config flags, `GetFlag`, `SetFlag` and programmatic setters.
 - Complete cleanup of input/render connections, camera geometry and lighting effects.
 
 ## Local blur: what it does
@@ -36,6 +39,41 @@ This is a Glass/DepthOfField technique, not the unreleased native `UIBlur` API:
 
 No Studio rendering claim is made by the command-line tests: final Glass appearance and sprite loading should still be checked in Roblox Studio Play mode on the target graphics settings.
 
+## Configurable background
+
+The decorative background sits behind the five panels and does not add fullscreen blur. The default mode is `Parallax`.
+
+```lua
+window:SetBackgroundMode("Particles")
+window:SetBackground({
+    Mode = "Particles",
+    ParticleCount = 40,   -- 0–80
+    ParticleSpeed = 42,   -- Pixels per second
+})
+
+window:SetBackground({
+    Mode = "Parallax",
+    ParallaxStrength = 20,
+})
+
+window:SetBackground({
+    Mode = "Image",
+    Image = "rbxassetid://123456",
+    ImageTransparency = 0.35,
+    ImageDim = 0.22,      -- Darkens only the image for readability
+})
+
+window:SetBackgroundMode("None")
+local current = window:GetBackground()
+```
+
+- **Parallax:** faint geometric rings follow the pointer with damped depth and slow ambient drift.
+- **Particles:** independent particles move continuously and reflect from the viewport edges.
+- **Image:** a user-supplied Roblox image uses `Crop` scaling and subtle pointer parallax. No image asset is uploaded by the library.
+- **None:** disables the decorative layer while preserving the interface and panel-local blur.
+
+The standalone Miscellaneous column includes a mode dropdown, particle-count slider and image-asset input.
+
 ## Fastest start — one LocalScript
 
 1. Open the complete [`Example.client.lua`](Example.client.lua).
@@ -53,11 +91,19 @@ local VantaUI = require(game.ReplicatedStorage.VantaUI)
 local window = VantaUI:CreateWindow({
     Name = "VantaUI",
     Accent = Color3.fromRGB(145, 116, 222),
-    ColumnWidth = 210,
-    ColumnHeight = 500,
+    ColumnWidth = 230,
+    ColumnHeight = 540,
+    MinColumnHeight = 400,
     ColumnGap = 10,
     ColumnY = 64,
     LocalBlur = true,
+    Background = {
+        Mode = "Parallax",
+        ParticleCount = 28,
+        ParticleSpeed = 42,
+        ParallaxStrength = 20,
+        -- Image = "rbxassetid://YOUR_IMAGE_ID",
+    },
     ToggleKey = Enum.KeyCode.RightShift,
 })
 
@@ -138,11 +184,13 @@ Important options:
 | `Font` | `Enum.Font.BuilderSans` | Body font |
 | `MediumFont` | `Enum.Font.BuilderSansMedium` | Labels and titles |
 | `BoldFont` | `Enum.Font.BuilderSansBold` | Emphasis |
-| `ColumnWidth` | `210` | Independent panel width |
-| `ColumnHeight` | `500` | Maximum column height; columns grow with content |
+| `ColumnWidth` | `230` | Independent panel width |
+| `ColumnHeight` | `540` | Maximum column height |
+| `MinColumnHeight` | `400` | Minimum column height; capped by `ColumnHeight` |
 | `ColumnGap` | `10` | Horizontal spacing |
 | `ColumnY` | `64` | Initial Y position |
-| `LocalBlur` | `true` | Panel-local Glass/DepthOfField backdrop |
+| `LocalBlur` | `true` | Panel-local Glass/DepthOfField blur |
+| `Background` | `{ Mode = "Parallax" }` | Decorative background configuration; `false` disables it |
 | `ToggleKey` | `RightShift` | Visibility key; `false` disables it |
 | `Visible` | `true` | Initial visibility |
 | `ReplaceExisting` | `true` | Replace a same-named ScreenGui |
@@ -152,7 +200,8 @@ Methods:
 ```lua
 window:Toggle()
 window:SetVisible(boolean, instant?)
-window:SetAccent(color3)
+window:SetBackgroundMode("Particles")
+window:SetBackground({ Mode = "Image", Image = "rbxassetid://123456" })
 window:Notify({ Title = "Saved", Content = "Done", Type = "Success" })
 window:GetFlag("combat.range")
 window:SetFlag("combat.range", 6)
@@ -166,6 +215,7 @@ local category = window:AddCategory({
     Title = "Combat",
     Icon = "combat",       -- Optional Lucide alias
     Visible = true,
+    MinHeight = 400, -- Optional per-category override
 })
 ```
 
@@ -176,7 +226,7 @@ Methods: `SetTitle`, `SetVisible`, `SetPosition`, `GetRow`. Panels are direct ch
 ```lua
 local toggle = category:AddToggle({
     Title = "Auto Sprint",
-    Description = "Optional second line",
+    Description = "Shown at the bottom on hover",
     Icon = "movement", -- Optional Lucide icon
     Default = false,
     Flag = "movement.sprint",
@@ -193,7 +243,7 @@ toggle:SetActive(true)        -- Row highlight without changing its value
 
 ### Inline settings
 
-Every component has `AddSettings(function(settings) ... end)`. A toggle may instead pass `Settings = function(settings) ... end` in its options. The gear rotates and the settings body expands inside the same column.
+Every component has `AddSettings(function(settings) ... end)`. A toggle may instead pass `Settings = function(settings) ... end` in its options. The gear rotates and the settings body expands inside the same column. Nested rows use 7 px gaps and 6 px content padding.
 
 ```lua
 aura:AddSettings(function(settings)
@@ -205,6 +255,10 @@ end)
 ```
 
 Settings support toggle, slider, dropdown, keybind, textbox, color picker and button controls.
+
+### Hover descriptions
+
+For normal controls, `Description` no longer consumes a second line in the row. Hovering the control reveals a centered bottom card with 17 px text; leaving the row, hiding the window or destroying the control dismisses it. `AddLabel` is the exception and keeps its description inline.
 
 ### Other controls
 
@@ -262,31 +316,23 @@ category:AddSeparator()
 
 Available aliases:
 
-| Alias | Meaning |
+| Alias group | Icons |
 | --- | --- |
-| `combat` | Swords |
-| `movement` | Person standing |
-| `visuals` | Eye |
-| `player` | User round |
-| `misc` | Shapes |
-| `settings` | Settings |
-| `search` | Search |
-| `dropdown` | Chevron down |
-| `check` | Check |
-| `keybind` | Keyboard |
-| `close` | X |
-| `color` | Palette |
-| `cursor` | Mouse pointer 2 |
-| `question` | Circle question mark |
+| Categories | `combat`, `movement`, `visuals`, `player`, `misc` |
+| Common aliases | `sword`, `speed`, `user`, `render`, `eye`, `world`, `grid` |
+| Controls | `settings`, `gear`, `utility`, `sliders`, `camera`, `color`, `palette` |
+| Chevrons | `chevron-right`, `chevron-down` |
 
-Icons use Roblox-hosted Lucide sprite sheets and sprite offsets. They are not hand-drawn approximations. Color defaults are tracked per window, so `SetAccent` recolors only the elements intended to follow the accent.
+Icons use Roblox-hosted Lucide sprite sheets and sprite offsets. They are not hand-drawn approximations. Icons are rendered from Roblox-hosted sprite sheets with source tile offsets; VantaUI does not fetch SVG files.
 
 ## Motion and lifecycle
 
 - Drag pickup uses a subtle `1.006` scale, quiet border emphasis and background response.
 - Position uses an exact critically damped spring: 34 Hz while dragging and 26 Hz after release, integrated in `PreRender` with a capped timestep.
 - Pointer input changes only the spring target; it never snaps the panel directly.
-- Panel visibility uses opacity only, without scale-in or staggered entrances.
+- Panel visibility combines opacity with a gentle 10 px critically damped rise; there is no scale-in or staggered entrance.
+- Inline panels use a 0.30-second Quint reveal with fade and an 8 px settle.
+- Hover descriptions and background modes crossfade instead of appearing abruptly.
 - Rows do not create ripple objects, press-scale containers or toggle pulses.
 - `Destroy()` disconnects listeners and removes notifications, Glass models and DepthOfField effects.
 
@@ -299,7 +345,9 @@ The revision is checked with the official Roblox Luau compiler/interpreter and A
 - six local Glass parts per panel, near-only DepthOfField settings and no `BlurEffect`;
 - backdrop projection updates and hide/show cleanup;
 - critically damped drag behavior without input snapping or overshoot;
-- inline settings height changes;
+- inline settings height and spacing changes;
+- all four background modes, image configuration and particle edge bouncing;
+- bottom hover-description show/hide behavior;
 - toggles, sliders, dropdowns, keybinds, textboxes, color pickers, buttons and flags;
 - final destruction cleanup.
 

@@ -1,5 +1,5 @@
--- VantaUI 3.0 standalone example
--- Separated rows, rounded independent panels and local glass backdrops.
+-- VantaUI 3.1 standalone example
+-- Larger separated panels, configurable animated backdrop and hover descriptions.
 -- Paste this ENTIRE file into a LocalScript in StarterPlayerScripts.
 -- No ModuleScript, ReplicatedStorage setup or additional files are required.
 -- In Roblox Studio use Play / Play Solo, not the server-only Run mode.
@@ -9,7 +9,7 @@ print("[VantaUI] Example is starting...")
 
 local VantaUI = (function()
 --[[
-    VantaUI 3.0.1
+    VantaUI 3.1.0
     Independent, draggable column panels for Roblox, written in Luau.
 
     Interface only: no game logic, remotes, executor APIs or external HTTP requests.
@@ -25,15 +25,16 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 
 local VantaUI = {}
-VantaUI.Version = "3.0.1"
+VantaUI.Version = "3.1.0"
 
 local MOTION = {
-    Instant = TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-    Fast = TweenInfo.new(0.14, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-    Medium = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-    Slow = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-    Spring = TweenInfo.new(0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
-    Drag = TweenInfo.new(0.16, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    Instant = TweenInfo.new(0.10, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    Fast = TweenInfo.new(0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    Medium = TweenInfo.new(0.30, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Slow = TweenInfo.new(0.40, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Spring = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Drag = TweenInfo.new(0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    Reveal = TweenInfo.new(0.36, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 }
 
 local function create(className, properties, parent)
@@ -269,11 +270,60 @@ local function addRightControl(component, control, width, order)
     return control
 end
 
+local function showHoverDescription(window, component)
+    local frame = window._descriptionFrame
+    local label = window._descriptionLabel
+    local text = component._descriptionText
+    if not frame or not label or not text or text == "" or not window._visible or window._destroyed then
+        return
+    end
+
+    window._descriptionRevision = (window._descriptionRevision or 0) + 1
+    window._descriptionOwner = component
+    label.Text = text
+    if not frame.Visible then
+        frame.GroupTransparency = 1
+        frame.Position = UDim2.new(0.5, 0, 1, -16)
+        frame.Visible = true
+    end
+    tween(frame, MOTION.Fast, {
+        GroupTransparency = 0,
+        Position = UDim2.new(0.5, 0, 1, -24),
+    })
+end
+
+local function hideHoverDescription(window, component, instant)
+    local frame = window._descriptionFrame
+    if not frame or (component ~= nil and window._descriptionOwner ~= component) then
+        return
+    end
+
+    window._descriptionRevision = (window._descriptionRevision or 0) + 1
+    local revision = window._descriptionRevision
+    window._descriptionOwner = nil
+    if instant then
+        frame.Visible = false
+        frame.GroupTransparency = 1
+        return
+    end
+
+    tween(frame, MOTION.Fast, {
+        GroupTransparency = 1,
+        Position = UDim2.new(0.5, 0, 1, -16),
+    })
+    task.delay(0.19, function()
+        if window._descriptionRevision == revision and not window._descriptionOwner and frame.Parent then
+            frame.Visible = false
+        end
+    end)
+end
+
 local function createItem(container, options)
     local window = container.Window
     local theme = window.Theme
-    local hasDescription = options.Description ~= nil and options.Description ~= ""
-    local height = options.Height or (hasDescription and 46 or 34)
+    local hasInlineDescription = options.Description ~= nil and options.Description ~= ""
+        and options.InlineDescription == true
+    local height = options.Height or 36
 
     local root = create("Frame", {
         Name = (options.Title or "Item") .. "Item",
@@ -323,15 +373,15 @@ local function createItem(container, options)
         itemIcon.ZIndex = 3
     end
 
-    local title = makeText(header, options.Title, options.TextSize or 13, theme.Text, Enum.Font.BuilderSansMedium)
+    local title = makeText(header, options.Title, options.TextSize or 14, theme.Text, Enum.Font.BuilderSansMedium)
     title.Name = "Title"
-    title.Position = UDim2.fromOffset(left, hasDescription and 4 or 0)
-    title.Size = UDim2.new(1, -(left + 10), 0, hasDescription and 20 or height)
+    title.Position = UDim2.fromOffset(left, hasInlineDescription and 4 or 0)
+    title.Size = UDim2.new(1, -(left + 10), 0, hasInlineDescription and 20 or height)
     title.ZIndex = 3
 
     local description
-    if hasDescription then
-        description = makeText(header, options.Description, 11, theme.SubText, Enum.Font.BuilderSans)
+    if hasInlineDescription then
+        description = makeText(header, options.Description, 12, theme.SubText, Enum.Font.BuilderSans)
         description.Name = "Description"
         description.Position = UDim2.fromOffset(left, 26)
         description.Size = UDim2.new(1, -(left + 10), 0, 16)
@@ -371,6 +421,9 @@ local function createItem(container, options)
         LeftPadding = left,
         Height = height,
         SearchText = string.lower(tostring(options.Title or "") .. " " .. tostring(options.Description or "")),
+        _descriptionText = options.Description ~= nil and tostring(options.Description) or nil,
+        _titleX = left,
+        _titleY = hasInlineDescription and 4 or 0,
         _active = false,
         _hovered = false,
         _destroyed = false,
@@ -411,16 +464,35 @@ local function createItem(container, options)
         end
     end
 
-    if options.Interactive ~= false then
-        listen(window, header.MouseEnter, function()
+    listen(window, header.MouseEnter, function()
+        if options.Interactive ~= false then
             self._hovered = true
             self:RefreshBackground(true)
-        end)
-        listen(window, header.MouseLeave, function()
+            tween(title, MOTION.Fast, {
+                Position = UDim2.fromOffset(left + 1, self._titleY),
+            })
+        end
+        if self._descriptionText and not options.InlineDescription then
+            showHoverDescription(window, self)
+        end
+    end)
+    listen(window, header.MouseLeave, function()
+        if options.Interactive ~= false then
             self._hovered = false
             self:RefreshBackground(true)
-        end)
-    end
+            tween(title, MOTION.Fast, {
+                Position = UDim2.fromOffset(left, self._titleY),
+            })
+        end
+        if window._descriptionOwner == self then
+            hideHoverDescription(window, self, false)
+        end
+    end)
+    listen(window, root.Destroying, function()
+        if window._descriptionOwner == self then
+            hideHoverDescription(window, self, true)
+        end
+    end)
 
     return self
 end
@@ -428,7 +500,7 @@ end
 local function createInlinePanel(component, name, paddingAmount)
     local window = component.Window
     local theme = window.Theme
-    local pad = paddingAmount or 4
+    local pad = paddingAmount or 6
 
     component._panelOrder = (component._panelOrder or 0) + 1
     local root = create("Frame", {
@@ -445,7 +517,7 @@ local function createInlinePanel(component, name, paddingAmount)
     local content = create("CanvasGroup", {
         Name = "Content",
         Size = UDim2.new(1, 0, 0, 0),
-        Position = UDim2.fromOffset(0, -3),
+        Position = UDim2.fromOffset(0, -8),
         BackgroundColor3 = theme.Inset,
         BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
@@ -453,14 +525,14 @@ local function createInlinePanel(component, name, paddingAmount)
         ClipsDescendants = true,
         Active = false,
     }, root)
-    corner(content, 7)
+    corner(content, 8)
     stroke(content, theme.Stroke, 0.78, 1)
     padding(content, pad, pad, pad, pad)
 
     local layout = create("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 3),
+        Padding = UDim.new(0, 7),
     }, content)
 
     local panel = {
@@ -499,7 +571,7 @@ local function createInlinePanel(component, name, paddingAmount)
                 content.GroupTransparency = 0
             else
                 root.Size = UDim2.new(1, 0, 0, math.min(root.Size.Y.Offset, height))
-                content.Position = UDim2.fromOffset(0, -3)
+                content.Position = UDim2.fromOffset(0, -8)
                 content.GroupTransparency = 1
                 tween(root, MOTION.Medium, { Size = UDim2.new(1, 0, 0, height) })
                 tween(content, MOTION.Medium, {
@@ -515,10 +587,10 @@ local function createInlinePanel(component, name, paddingAmount)
             else
                 tween(root, MOTION.Medium, { Size = UDim2.new(1, 0, 0, 0) })
                 tween(content, MOTION.Fast, {
-                    Position = UDim2.fromOffset(0, -2),
+                    Position = UDim2.fromOffset(0, -6),
                     GroupTransparency = 1,
                 })
-                task.delay(0.27, function()
+                task.delay(0.31, function()
                     if self._revision == revision and not self.Open then
                         root.Visible = false
                     end
@@ -581,7 +653,7 @@ function Component:AddSettings(builder)
     icon.Position = UDim2.fromScale(0.5, 0.5)
     icon.ZIndex = 6
 
-    local panel = createInlinePanel(self, "InlineSettings", 4)
+    local panel = createInlinePanel(self, "InlineSettings", 6)
     panel._onStateChanged = function(open)
         tween(icon, MOTION.Medium, { Rotation = open and 90 or 0 })
         tween(gear, MOTION.Fast, {
@@ -630,7 +702,7 @@ end
 
 function Component:SetTitle(text)
     self.Title.Text = tostring(text)
-    self.SearchText = string.lower(tostring(text) .. " " .. (self.Description and self.Description.Text or ""))
+    self.SearchText = string.lower(tostring(text) .. " " .. (self._descriptionText or ""))
     return self
 end
 
@@ -679,26 +751,26 @@ function Container:AddToggle(options)
 
     local track = create("Frame", {
         Name = "Switch",
-        Size = UDim2.fromOffset(34, 18),
+        Size = UDim2.fromOffset(38, 20),
         BackgroundColor3 = theme.Track,
         BorderSizePixel = 0,
         Active = false,
         ZIndex = 6,
     })
-    corner(track, 9)
-    addRightControl(component, track, 34, 1)
+    corner(track, 10)
+    addRightControl(component, track, 38, 1)
 
     local knob = create("Frame", {
         Name = "Knob",
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0, 9, 0.5, 0),
-        Size = UDim2.fromOffset(12, 12),
+        Position = UDim2.new(0, 10, 0.5, 0),
+        Size = UDim2.fromOffset(14, 14),
         BackgroundColor3 = theme.SubText,
         BorderSizePixel = 0,
         ZIndex = 7,
         Active = false,
     }, track)
-    corner(knob, 6)
+    corner(knob, 7)
 
     local function update(state, animated, notify)
         state = state and true or false
@@ -706,7 +778,7 @@ function Container:AddToggle(options)
         value = state
         component:SetActive(state, animated)
         local properties = {
-            Position = state and UDim2.new(1, -9, 0.5, 0) or UDim2.new(0, 9, 0.5, 0),
+            Position = state and UDim2.new(1, -10, 0.5, 0) or UDim2.new(0, 10, 0.5, 0),
             BackgroundColor3 = state and theme.White or theme.SubText,
         }
         if animated == false then
@@ -762,7 +834,7 @@ function Container:AddButton(options)
 
     listen(self.Window, component.Hitbox.Activated, function()
         component:SetActive(true, true)
-        task.delay(0.18, function()
+        task.delay(0.22, function()
             if not component._destroyed and not component.Window._destroyed then
                 component:SetActive(false, true)
             end
@@ -781,7 +853,7 @@ end
 function Container:AddSlider(options)
     options = options or {}
     options.Title = options.Title or options.Name or "Slider"
-    options.Height = options.Height or 56
+    options.Height = options.Height or 60
     options.Interactive = false
     local theme = self.Window.Theme
     local component = createItem(self, options)
@@ -988,7 +1060,7 @@ function Container:AddDropdown(options)
     local icon = makeChevron(component.Right, theme.Muted, 14)
     addRightControl(component, icon, 14, 2)
 
-    local panel = createInlinePanel(component, "DropdownOptions", 5)
+    local panel = createInlinePanel(component, "DropdownOptions", 6)
     local optionButtons = {}
 
     local function update(valueTextOnly)
@@ -1221,7 +1293,7 @@ end
 function Container:AddTextbox(options)
     options = options or {}
     options.Title = options.Title or options.Name or "Textbox"
-    options.Height = options.Height or 62
+    options.Height = options.Height or 64
     options.Interactive = false
     local theme = self.Window.Theme
     local component = createItem(self, options)
@@ -1395,7 +1467,8 @@ function Container:AddLabel(options)
     options = options or {}
     options.Title = options.Title or options.Name or "Label"
     options.Interactive = false
-    options.Height = options.Height or (options.Description and 46 or 32)
+    options.InlineDescription = true
+    options.Height = options.Height or (options.Description and 48 or 34)
     local component = createItem(self, options)
     component.Header.BackgroundTransparency = 1
     component.HeaderStroke.Transparency = 1
@@ -1436,6 +1509,375 @@ function Container:AddSeparator(options)
     return separator
 end
 
+local BACKGROUND_MODES = {
+    parallax = "Parallax",
+    particles = "Particles",
+    image = "Image",
+    none = "None",
+}
+local MAX_PARTICLES = 80
+
+local function normalizeBackgroundMode(mode)
+    local normalized = BACKGROUND_MODES[string.lower(tostring(mode or "Parallax"))]
+    assert(normalized, "[VantaUI] Background mode must be Parallax, Particles, Image or None")
+    return normalized
+end
+
+local function deterministicNoise(index, salt)
+    local value = math.sin(index * 12.9898 + salt * 78.233) * 43758.5453
+    return value - math.floor(value)
+end
+
+local function createBackground(window)
+    local theme = window.Theme
+    local root = create("CanvasGroup", {
+        Name = "Backdrop",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        GroupTransparency = 1,
+        ClipsDescendants = true,
+        Visible = false,
+        Active = false,
+        ZIndex = 1,
+    }, window.Gui)
+
+    local groups = {}
+    for _, name in ipairs({ "Parallax", "Particles", "Image" }) do
+        groups[name] = create("CanvasGroup", {
+            Name = name,
+            Size = UDim2.fromScale(1, 1),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            GroupTransparency = 1,
+            ClipsDescendants = true,
+            Visible = false,
+            Active = false,
+            ZIndex = 1,
+        }, root)
+    end
+
+    local parallaxItems = {}
+    local ringSpecs = {
+        { 0.06, 0.16, 190, 0.55 },
+        { 0.23, 0.80, 110, 0.85 },
+        { 0.42, 0.10, 84, 1.10 },
+        { 0.57, 0.88, 220, 0.50 },
+        { 0.75, 0.18, 130, 0.95 },
+        { 0.93, 0.72, 180, 0.65 },
+        { 0.87, 0.40, 72, 1.20 },
+        { 0.13, 0.48, 66, 1.30 },
+    }
+    for index, spec in ipairs(ringSpecs) do
+        local diameter = spec[3]
+        local ring = create("Frame", {
+            Name = "ParallaxRing" .. index,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(spec[1], spec[2]),
+            Size = UDim2.fromOffset(diameter, diameter),
+            BackgroundColor3 = index % 3 == 0 and theme.AccentText or theme.Accent,
+            BackgroundTransparency = 0.965,
+            BorderSizePixel = 0,
+            Active = false,
+            ZIndex = 1,
+        }, groups.Parallax)
+        corner(ring, diameter * 0.5)
+        stroke(ring, theme.Accent, 0.88, 1)
+        parallaxItems[index] = {
+            Frame = ring,
+            BaseX = spec[1],
+            BaseY = spec[2],
+            Depth = spec[4],
+            Phase = index * 0.83,
+        }
+    end
+
+    local camera = Workspace.CurrentCamera
+    local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+    local particles = {}
+    for index = 1, MAX_PARTICLES do
+        local diameter = 3 + math.floor(deterministicNoise(index, 1) * 4)
+        local angle = deterministicNoise(index, 2) * math.pi * 2
+        local particle = create("Frame", {
+            Name = "Particle" .. index,
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Size = UDim2.fromOffset(diameter, diameter),
+            BackgroundColor3 = index % 4 == 0 and theme.AccentText or theme.Accent,
+            BackgroundTransparency = 0.40,
+            BorderSizePixel = 0,
+            Active = false,
+            Visible = index <= 28,
+            ZIndex = 2,
+        }, groups.Particles)
+        corner(particle, diameter * 0.5)
+        particles[index] = {
+            Frame = particle,
+            X = 20 + deterministicNoise(index, 3) * math.max(viewport.X - 40, 1),
+            Y = 20 + deterministicNoise(index, 4) * math.max(viewport.Y - 40, 1),
+            DirectionX = math.cos(angle),
+            DirectionY = math.sin(angle),
+            Radius = diameter * 0.5,
+            Phase = index * 0.61,
+            BaseTransparency = 0.34 + deterministicNoise(index, 5) * 0.28,
+        }
+    end
+
+    local image = create("ImageLabel", {
+        Name = "BackgroundImage",
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1.06, 0, 1.06, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Image = "",
+        ImageTransparency = 0.35,
+        ScaleType = Enum.ScaleType.Crop,
+        Active = false,
+        ZIndex = 1,
+    }, groups.Image)
+    local imageShade = create("Frame", {
+        Name = "ImageShade",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.new(0, 0, 0),
+        BackgroundTransparency = 0.78,
+        BorderSizePixel = 0,
+        Active = false,
+        ZIndex = 2,
+    }, groups.Image)
+
+    window._backgroundRoot = root
+    window._backgroundGroups = groups
+    window._background = {
+        Mode = "Parallax",
+        Image = "",
+        ImageTransparency = 0.35,
+        ImageDim = 0.22,
+        ParticleCount = 28,
+        ParticleSpeed = 42,
+        ParallaxStrength = 20,
+    }
+    window._backgroundMode = "None"
+    window._backgroundRevision = 0
+    window._backgroundTime = 0
+    window._backgroundImage = image
+    window._backgroundImageShade = imageShade
+    window._parallaxItems = parallaxItems
+    window._particles = particles
+    window._pointer = nil
+    window._smoothPointerX = 0
+    window._smoothPointerY = 0
+end
+
+local function setBackgroundMode(window, mode, instant)
+    mode = normalizeBackgroundMode(mode)
+    instant = instant or not window._visible
+    if window._backgroundMode == mode and not instant then
+        return
+    end
+
+    window._backgroundMode = mode
+    window._background.Mode = mode
+    window._backgroundRevision = window._backgroundRevision + 1
+    local revision = window._backgroundRevision
+    local root = window._backgroundRoot
+    if mode ~= "None" and window._visible and not root.Visible then
+        root.GroupTransparency = 0
+        root.Visible = true
+    end
+
+    for name, group in pairs(window._backgroundGroups) do
+        if name == mode then
+            group.Visible = true
+            if instant then
+                group.GroupTransparency = 0
+            else
+                group.GroupTransparency = 1
+                tween(group, MOTION.Reveal, { GroupTransparency = 0 })
+            end
+        elseif group.Visible then
+            if instant then
+                group.Visible = false
+                group.GroupTransparency = 1
+            else
+                tween(group, MOTION.Medium, { GroupTransparency = 1 })
+                task.delay(0.31, function()
+                    if window._backgroundRevision == revision and window._backgroundMode ~= name and group.Parent then
+                        group.Visible = false
+                    end
+                end)
+            end
+        end
+    end
+
+    if mode == "None" then
+        if instant then
+            root.Visible = false
+            root.GroupTransparency = 1
+        else
+            task.delay(0.31, function()
+                if window._backgroundRevision == revision and window._backgroundMode == "None" and root.Parent then
+                    root.Visible = false
+                end
+            end)
+        end
+    end
+end
+
+function Window:SetBackground(options)
+    if self._destroyed then
+        return self
+    end
+    if options == nil then
+        options = {}
+    elseif options == false then
+        options = { Mode = "None" }
+    elseif type(options) == "string" then
+        options = { Mode = options }
+    end
+    assert(type(options) == "table", "[VantaUI] SetBackground expects a table, string or false")
+
+    local config = self._background
+    if options.Image ~= nil then
+        config.Image = tostring(options.Image)
+        self._backgroundImage.Image = config.Image
+    end
+    if options.ImageTransparency ~= nil then
+        config.ImageTransparency = clamp(options.ImageTransparency, 0, 1)
+        self._backgroundImage.ImageTransparency = config.ImageTransparency
+    end
+    if options.ImageDim ~= nil then
+        config.ImageDim = clamp(options.ImageDim, 0, 1)
+        self._backgroundImageShade.BackgroundTransparency = 1 - config.ImageDim
+    end
+    if options.ParticleCount ~= nil then
+        config.ParticleCount = math.floor(clamp(options.ParticleCount, 0, MAX_PARTICLES))
+        for index, particle in ipairs(self._particles) do
+            particle.Frame.Visible = index <= config.ParticleCount
+        end
+    end
+    if options.ParticleSpeed ~= nil then
+        config.ParticleSpeed = clamp(options.ParticleSpeed, 0, 160)
+    end
+    if options.ParallaxStrength ~= nil then
+        config.ParallaxStrength = clamp(options.ParallaxStrength, 0, 80)
+    end
+    if options.Mode ~= nil then
+        setBackgroundMode(self, options.Mode, false)
+    elseif self._backgroundMode == "None" and config.Mode ~= "None" then
+        setBackgroundMode(self, config.Mode, false)
+    end
+    return self
+end
+
+function Window:SetBackgroundMode(mode)
+    if not self._destroyed then
+        setBackgroundMode(self, mode, false)
+    end
+    return self
+end
+
+function Window:GetBackground()
+    local copy = {}
+    for key, value in pairs(self._background) do
+        copy[key] = value
+    end
+    return copy
+end
+
+local function setBackgroundVisible(window, state, instant)
+    local root = window._backgroundRoot
+    if not root then
+        return
+    end
+    if state and window._backgroundMode ~= "None" then
+        root.Visible = true
+        if instant then
+            root.GroupTransparency = 0
+        else
+            root.GroupTransparency = 1
+            tween(root, MOTION.Reveal, { GroupTransparency = 0 })
+        end
+    elseif instant then
+        root.Visible = false
+        root.GroupTransparency = 1
+    else
+        tween(root, MOTION.Fast, { GroupTransparency = 1 })
+        task.delay(0.19, function()
+            if not window._visible and root.Parent then
+                root.Visible = false
+            end
+        end)
+    end
+end
+
+local function updateBackground(window, deltaTime)
+    if not window._visible or not window._backgroundRoot.Visible or window._backgroundMode == "None" then
+        return
+    end
+    local camera = Workspace.CurrentCamera
+    local viewport = camera and camera.ViewportSize or Vector2.new(1280, 720)
+    if viewport.X <= 0 or viewport.Y <= 0 then
+        return
+    end
+
+    local step = math.min(deltaTime, 0.05)
+    window._backgroundTime = window._backgroundTime + step
+    local time = window._backgroundTime
+    local targetX = window._pointer and (window._pointer.X / viewport.X - 0.5) * 2 or 0
+    local targetY = window._pointer and (window._pointer.Y / viewport.Y - 0.5) * 2 or 0
+    local smoothing = 1 - math.exp(-step * 7)
+    window._smoothPointerX = window._smoothPointerX + (targetX - window._smoothPointerX) * smoothing
+    window._smoothPointerY = window._smoothPointerY + (targetY - window._smoothPointerY) * smoothing
+
+    if window._backgroundMode == "Parallax" then
+        local strength = window._background.ParallaxStrength
+        for _, item in ipairs(window._parallaxItems) do
+            local driftX = math.sin(time * 0.22 + item.Phase) * 8
+            local driftY = math.cos(time * 0.18 + item.Phase) * 7
+            item.Frame.Position = UDim2.new(
+                item.BaseX,
+                window._smoothPointerX * strength * item.Depth + driftX,
+                item.BaseY,
+                window._smoothPointerY * strength * item.Depth + driftY
+            )
+        end
+    elseif window._backgroundMode == "Particles" then
+        local speed = window._background.ParticleSpeed
+        for index = 1, window._background.ParticleCount do
+            local particle = window._particles[index]
+            particle.X = particle.X + particle.DirectionX * speed * step
+            particle.Y = particle.Y + particle.DirectionY * speed * step
+            if particle.X < particle.Radius then
+                particle.X = particle.Radius
+                particle.DirectionX = math.abs(particle.DirectionX)
+            elseif particle.X > viewport.X - particle.Radius then
+                particle.X = viewport.X - particle.Radius
+                particle.DirectionX = -math.abs(particle.DirectionX)
+            end
+            if particle.Y < particle.Radius then
+                particle.Y = particle.Radius
+                particle.DirectionY = math.abs(particle.DirectionY)
+            elseif particle.Y > viewport.Y - particle.Radius then
+                particle.Y = viewport.Y - particle.Radius
+                particle.DirectionY = -math.abs(particle.DirectionY)
+            end
+            particle.Frame.Position = UDim2.fromOffset(particle.X, particle.Y)
+            particle.Frame.BackgroundTransparency = clamp(
+                particle.BaseTransparency + math.sin(time * 1.5 + particle.Phase) * 0.08,
+                0.18,
+                0.82
+            )
+        end
+    elseif window._backgroundMode == "Image" then
+        window._backgroundImage.Position = UDim2.new(
+            0.5,
+            -window._smoothPointerX * 8,
+            0.5,
+            -window._smoothPointerY * 8
+        )
+    end
+end
+
 function Window:Notify(options)
     options = options or {}
     if self._destroyed then
@@ -1445,7 +1887,7 @@ function Window:Notify(options)
     local theme = self.Theme
     local kind = options.Type or "Info"
     local accent = theme[kind] or theme.Info
-    local height = options.Content and 72 or 54
+    local height = options.Content and 78 or 58
 
     local wrapper = create("Frame", {
         Name = "NotificationWrapper",
@@ -1457,7 +1899,7 @@ function Window:Notify(options)
 
     local toast = create("CanvasGroup", {
         Name = "Notification",
-        Position = UDim2.fromOffset(24, 0),
+        Position = UDim2.fromOffset(20, 0),
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = theme.Surface,
         BorderSizePixel = 0,
@@ -1474,13 +1916,13 @@ function Window:Notify(options)
         Active = false,
     }, toast)
 
-    local title = makeText(toast, options.Title or kind, 13, theme.Text, Enum.Font.BuilderSansBold)
+    local title = makeText(toast, options.Title or kind, 14, theme.Text, Enum.Font.BuilderSansBold)
     title.Position = UDim2.fromOffset(14, options.Content and 9 or 0)
     title.Size = UDim2.new(1, -48, 0, options.Content and 20 or height)
 
     local content
     if options.Content then
-        content = makeText(toast, options.Content, 11, theme.SubText, Enum.Font.BuilderSans)
+        content = makeText(toast, options.Content, 12, theme.SubText, Enum.Font.BuilderSans)
         content.Position = UDim2.fromOffset(14, 31)
         content.Size = UDim2.new(1, -28, 0, 28)
         content.TextWrapped = true
@@ -1509,10 +1951,10 @@ function Window:Notify(options)
             progressTween:Cancel()
         end
         tween(toast, MOTION.Medium, {
-            Position = UDim2.fromOffset(30, 0),
+            Position = UDim2.fromOffset(24, 0),
             GroupTransparency = 1,
         })
-        task.delay(0.27, function()
+        task.delay(0.31, function()
             if wrapper.Parent then
                 wrapper:Destroy()
             end
@@ -1820,7 +2262,7 @@ function Window:AddCategory(options)
     local frame = create("CanvasGroup", {
         Name = (options.Title or "Category") .. "Category",
         Position = options.Position or UDim2.fromOffset(16, self._columnY),
-        Size = UDim2.fromOffset(width, 51),
+        Size = UDim2.fromOffset(width, 53),
         BackgroundColor3 = theme.Column,
         BackgroundTransparency = 0.28,
         BorderSizePixel = 0,
@@ -1836,7 +2278,7 @@ function Window:AddCategory(options)
 
     local header = create("Frame", {
         Name = "Header",
-        Size = UDim2.new(1, 0, 0, 38),
+        Size = UDim2.new(1, 0, 0, 40),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Active = true,
@@ -1856,7 +2298,7 @@ function Window:AddCategory(options)
     corner(headerBackground, 8)
     create("Frame", {
         Name = "Divider",
-        Position = UDim2.fromOffset(0, 37),
+        Position = UDim2.fromOffset(0, 39),
         Size = UDim2.new(1, 0, 0, 1),
         BackgroundColor3 = theme.Stroke,
         BackgroundTransparency = 0.58,
@@ -1866,12 +2308,12 @@ function Window:AddCategory(options)
     }, header)
 
     if options.Icon then
-        local icon = makeIcon(header, options.Icon, theme.AccentText, 16)
+        local icon = makeIcon(header, options.Icon, theme.AccentText, 18)
         icon.Position = UDim2.fromOffset(10, 11)
         icon.ZIndex = 23
     end
 
-    local title = makeText(header, options.Title or "Category", 14, theme.Text, Enum.Font.BuilderSansMedium)
+    local title = makeText(header, options.Title or "Category", 15, theme.Text, Enum.Font.BuilderSansMedium)
     title.Position = UDim2.new()
     title.Size = UDim2.fromScale(1, 1)
     title.TextXAlignment = Enum.TextXAlignment.Center
@@ -1879,7 +2321,7 @@ function Window:AddCategory(options)
 
     local body = create("ScrollingFrame", {
         Name = "Items",
-        Position = UDim2.fromOffset(4, 42),
+        Position = UDim2.fromOffset(4, 44),
         Size = UDim2.new(1, -8, 0, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -1915,6 +2357,7 @@ function Window:AddCategory(options)
         _dragging = false,
         _width = width,
         _maxHeight = options.Height or self._columnHeight,
+        _minHeight = options.MinHeight or self._minColumnHeight,
         _positioned = options.Position ~= nil,
         _visible = false,
         _visibilityRevision = 0,
@@ -1933,8 +2376,13 @@ function Window:AddCategory(options)
             return
         end
         local contentHeight = bodyLayout.AbsoluteContentSize.Y + 8 -- UIPadding: 2 top + 6 bottom
-        local bodyHeight = clamp(contentHeight, 0, math.max(40, category._maxHeight - 46))
-        local totalHeight = math.max(51, bodyHeight + 46)
+        local minimumHeight = math.min(category._minHeight, category._maxHeight)
+        local totalHeight = clamp(
+            math.max(53, contentHeight + 48),
+            minimumHeight,
+            category._maxHeight
+        )
+        local bodyHeight = math.max(0, totalHeight - 48)
         category._targetHeight = totalHeight
 
         local frameSize = UDim2.fromOffset(width, totalHeight)
@@ -2047,16 +2495,22 @@ function Category:SetVisible(state, instant)
         if instant then
             self.Root.GroupTransparency = 0
         else
+            if self._targetPosition then
+                self.Root.Position = UDim2.fromOffset(self._targetPosition.X, self._targetPosition.Y + 10)
+                self._velocityX = 0
+                self._velocityY = 0
+            end
             self.Root.GroupTransparency = 1
-            tween(self.Root, MOTION.Medium, { GroupTransparency = 0 })
+            tween(self.Root, MOTION.Reveal, { GroupTransparency = 0 })
         end
     else
         if instant then
             self.Root.Visible = false
             self.Root.GroupTransparency = 1
         else
+            self._velocityY = -18
             tween(self.Root, MOTION.Fast, { GroupTransparency = 1 })
-            task.delay(0.15, function()
+            task.delay(0.19, function()
                 if self._visibilityRevision == revision and not self._visible then
                     self.Root.Visible = false
                 end
@@ -2104,6 +2558,10 @@ function Window:SetVisible(state, instant)
     self._visibilityRevision = self._visibilityRevision + 1
     local revision = self._visibilityRevision
 
+    if not state then
+        hideHoverDescription(self, nil, true)
+    end
+    setBackgroundVisible(self, state, instant)
     for _, category in ipairs(self.Categories) do
         category:SetVisible(state, instant)
     end
@@ -2130,7 +2588,7 @@ function Window:SetVisible(state, instant)
             self._depthOfField = nil
         else
             tween(self._depthOfField, MOTION.Fast, { NearIntensity = 0 })
-            task.delay(0.15, function()
+            task.delay(0.19, function()
                 if self._visibilityRevision == revision and not self._visible and self._depthOfField then
                     self._depthOfField:Destroy()
                     self._depthOfField = nil
@@ -2219,8 +2677,9 @@ function VantaUI:CreateWindow(options)
         _visibilityRevision = 0,
         _capturing = false,
         _destroyed = false,
-        _columnWidth = options.ColumnWidth or 210,
-        _columnHeight = options.ColumnHeight or 500,
+        _columnWidth = options.ColumnWidth or 230,
+        _columnHeight = options.ColumnHeight or 540,
+        _minColumnHeight = options.MinColumnHeight or 400,
         _columnGap = options.ColumnGap or 10,
         _columnY = options.ColumnY or options.Y or 64,
         _localBlur = true,
@@ -2235,6 +2694,38 @@ function VantaUI:CreateWindow(options)
     end
     self._localBlur = blurOption ~= false and blurOption ~= 0
 
+    createBackground(self)
+    self:SetBackground(options.Background)
+
+    local descriptionFrame = create("CanvasGroup", {
+        Name = "HoverDescription",
+        AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, -16),
+        Size = UDim2.fromOffset(580, 56),
+        BackgroundColor3 = theme.Column,
+        BackgroundTransparency = 0.06,
+        BorderSizePixel = 0,
+        GroupTransparency = 1,
+        ClipsDescendants = true,
+        Visible = false,
+        Active = false,
+        ZIndex = 900,
+    }, gui)
+    corner(descriptionFrame, 10)
+    stroke(descriptionFrame, theme.Stroke, 0.62, 1)
+    local descriptionLabel = makeText(descriptionFrame, "", 17, theme.Text, Enum.Font.BuilderSansMedium)
+    descriptionLabel.Name = "Description"
+    descriptionLabel.Position = UDim2.fromOffset(16, 0)
+    descriptionLabel.Size = UDim2.new(1, -32, 1, 0)
+    descriptionLabel.TextWrapped = true
+    descriptionLabel.TextTruncate = Enum.TextTruncate.None
+    descriptionLabel.TextXAlignment = Enum.TextXAlignment.Center
+    descriptionLabel.ZIndex = 901
+    self._descriptionFrame = descriptionFrame
+    self._descriptionLabel = descriptionLabel
+    self._descriptionOwner = nil
+    self._descriptionRevision = 0
+
     listen(self, gui.Destroying, function()
         if not self._destroyed then
             cleanupWindow(self)
@@ -2247,7 +2738,7 @@ function VantaUI:CreateWindow(options)
         Name = "Notifications",
         AnchorPoint = Vector2.new(1, 1),
         Position = UDim2.new(1, -18, 1, -18),
-        Size = UDim2.fromOffset(320, 410),
+        Size = UDim2.fromOffset(340, 430),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Active = false,
@@ -2258,7 +2749,7 @@ function VantaUI:CreateWindow(options)
         VerticalAlignment = Enum.VerticalAlignment.Bottom,
         HorizontalAlignment = Enum.HorizontalAlignment.Right,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 8),
+        Padding = UDim.new(0, 10),
     }, notifications)
     self._notificationHolder = notifications
 
@@ -2277,10 +2768,16 @@ function VantaUI:CreateWindow(options)
     end)
     bindCamera()
     ensureLocalBlurContainer(self)
+    listen(self, UserInputService.InputChanged, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            self._pointer = Vector2.new(input.Position.X, input.Position.Y)
+        end
+    end)
     listen(self, RunService.PreRender, function(deltaTime)
         if self._destroyed then
             return
         end
+        updateBackground(self, deltaTime)
         for _, category in ipairs(self.Categories) do
             updateCategoryMotion(category, deltaTime)
             updateCategoryBlur(category)
@@ -2364,12 +2861,22 @@ end)()
 local window = VantaUI:CreateWindow({
     Name = "VantaUI",
     Accent = Color3.fromRGB(145, 116, 222),
-    ColumnWidth = 210,
-    ColumnHeight = 500,
+    ColumnWidth = 230,
+    ColumnHeight = 540,
+    MinColumnHeight = 400,
     ColumnGap = 10,
     ColumnY = 64,
     ToggleKey = Enum.KeyCode.RightShift,
     LocalBlur = true,
+    Background = {
+        Mode = "Parallax", -- "Parallax", "Particles", "Image" or "None"
+        ParticleCount = 28,
+        ParticleSpeed = 42,
+        ParallaxStrength = 20,
+        -- Image = "rbxassetid://YOUR_IMAGE_ID",
+        ImageTransparency = 0.35,
+        ImageDim = 0.22,
+    },
 })
 
 local combat = window:AddCategory({ Title = "Combat", Icon = "combat" })
@@ -2539,6 +3046,39 @@ player:AddButton({
     end,
 })
 
+utility:AddDropdown({
+    Title = "Backdrop",
+    Description = "Choose what moves behind the interface",
+    Values = { "Parallax", "Particles", "Image", "None" },
+    Default = "Parallax",
+    Flag = "ui.backdrop",
+    Callback = function(mode)
+        window:SetBackgroundMode(mode)
+    end,
+})
+utility:AddSlider({
+    Title = "Particle count",
+    Description = "Particles bounce off the screen edges",
+    Min = 8,
+    Max = 64,
+    Step = 1,
+    Default = 28,
+    Callback = function(count)
+        window:SetBackground({ ParticleCount = count })
+    end,
+})
+utility:AddTextbox({
+    Title = "Backdrop image",
+    Description = "Paste a Roblox image asset and press Enter",
+    Placeholder = "rbxassetid://...",
+    Default = "",
+    Callback = function(asset, enterPressed)
+        if enterPressed and asset ~= "" then
+            window:SetBackground({ Mode = "Image", Image = asset })
+        end
+    end,
+})
+
 utility:AddColorPicker({
     Title = "Interface accent preview",
     Icon = "color",
@@ -2559,7 +3099,7 @@ utility:AddToggle({ Title = "Click Teleport", Default = false })
 utility:AddToggle({ Title = "Config Autosave", Default = true })
 utility:AddSeparator()
 utility:AddLabel({
-    Title = "VantaUI 3.0",
+    Title = "VantaUI 3.1",
     Description = "Independent draggable panels",
 })
 
