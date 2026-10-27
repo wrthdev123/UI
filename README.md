@@ -31,7 +31,7 @@ local VantaUI = require(ReplicatedStorage:WaitForChild("VantaUI"))
 
 local window = VantaUI:CreateWindow({
     Name = "VantaUI",
-    Accent = Color3.fromRGB(237, 45, 72),
+    Accent = Color3.fromRGB(145, 116, 222),
     ColumnWidth = 196,
     ColumnHeight = 500,
     ColumnY = 64,
@@ -41,12 +41,13 @@ local window = VantaUI:CreateWindow({
 
 local combat = window:AddCategory({
     Title = "Combat",
-    Icon = "C",
+    Icon = "combat",
 })
 
 local aura = combat:AddToggle({
     Title = "Kill Aura",
-    Description = "Click the chevron for settings",
+    Description = "Use the gear for inline settings",
+    Icon = "combat",
     Default = true,
     Flag = "combat.aura",
     Callback = function(enabled)
@@ -75,6 +76,8 @@ end)
 ## Что реализовано
 
 - Пять независимых панелей без общего окна, backdrop или затемняющего градиента.
+- Компактная тёмно-фиолетовая тема и спокойный selected-state без сплошной яркой заливки.
+- Векторные иконки категорий, компонентов и настроек без внешних asset ID.
 - Перетаскивание каждой панели за её заголовок мышью или касанием.
 - Автоматическая высота панели и вертикальная прокрутка после достижения `ColumnHeight`.
 - Stagger-анимация показа и скрытия всех панелей через `Right Shift`.
@@ -92,7 +95,7 @@ end)
 | Параметр | Тип / значение по умолчанию | Назначение |
 |---|---|---|
 | `Name` | `"VantaUI"` | Имя ScreenGui |
-| `Accent` | `Color3.fromRGB(237, 45, 72)` | Акцентный цвет |
+| `Accent` | `Color3.fromRGB(145, 116, 222)` | Акцентный цвет |
 | `Theme` | `nil` | Таблица переопределений цветов |
 | `ColumnWidth` | `196` | Ширина новых панелей |
 | `ColumnHeight` | `500` | Максимальная высота панели |
@@ -125,7 +128,7 @@ window:Destroy()
 ```lua
 local category = window:AddCategory({
     Title = "Movement",
-    Icon = "M",       -- необязательный короткий glyph
+    Icon = "movement", -- необязательная векторная иконка
     Width = 196,      -- необязательная ширина
     Height = 500,     -- необязательная максимальная высота
     -- Position = UDim2.fromOffset(80, 64),
@@ -136,11 +139,13 @@ category:SetPosition(UDim2.fromOffset(100, 80))
 category:SetVisible(false)
 ```
 
+Доступные имена иконок: `combat`, `sword`, `movement`, `speed`, `player`, `user`, `visuals`, `render`, `eye`, `settings`, `gear`, `utility`, `sliders`, `camera`, `color`, `palette`, `world`, `misc`/`grid`.
+
 ### Общие параметры компонентов
 
 Большинство компонентов принимает:
 
-- `Title` (или `Name`), `Description`, `Flag`;
+- `Title` (или `Name`), `Description`, `Icon`, `Flag`;
 - `Default` и `Callback`, если применимо;
 - `Settings = function(settings) ... end` для inline-панели сразу при создании.
 
@@ -216,7 +221,7 @@ category:AddTextbox({
 ```lua
 category:AddColorPicker({
     Title = "Highlight",
-    Default = Color3.fromRGB(237, 45, 72),
+    Default = Color3.fromRGB(145, 116, 222),
     Callback = function(color) print(color) end,
 })
 ```
@@ -250,4 +255,4 @@ local window = VantaUI:CreateWindow({
 })
 ```
 
-Доступные ключи: `Column`, `Surface`, `SurfaceHover`, `SurfaceActive`, `Inset`, `Track`, `Stroke`, `Text`, `SubText`, `Muted`, `White`, `Success`, `Warning`, `Danger`, `Info`, `Accent`, `AccentDark`, `AccentSoft`.
+Доступные ключи: `Column`, `Header`, `Surface`, `SurfaceHover`, `SurfaceActive`, `Inset`, `Track`, `Stroke`, `Text`, `SubText`, `Muted`, `White`, `Success`, `Warning`, `Danger`, `Info`, `Accent`, `AccentDark`, `AccentSoft`, `AccentText`.
