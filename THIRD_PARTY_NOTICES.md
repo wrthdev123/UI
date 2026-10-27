@@ -1,5 +1,11 @@
 # Third-party notices
 
+## Local-blur implementation reference
+
+The camera-projected Glass / near-only DepthOfField technique was researched through **Lum-s/ui-blur**, licensed under Apache-2.0: <https://github.com/Lum-s/ui-blur>. VantaUI's lifecycle, panel integration, rounded-part construction and motion code are implemented independently; the upstream renderer, templates, mesh assets and source modules are not embedded or required at runtime.
+
+## Lucide icons
+
 VantaUI uses icon names, Roblox sprite-sheet asset IDs and 48 × 48 sprite coordinates from **lucide-roblox 0.1.3**, which packages **Lucide 0.363.0**. The standalone example embeds the same data and includes these notices in its source so that copying that one file preserves attribution.
 
 - Project: <https://github.com/latte-soft/lucide-roblox>

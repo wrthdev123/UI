@@ -1,5 +1,5 @@
--- VantaUI 2.2 standalone example
--- Independent glass panels, real Lucide icons and spring-based drag motion.
+-- VantaUI 3.0 standalone example
+-- Flat independent panels, local glass backdrops and critically damped drag.
 -- Paste this ENTIRE file into a LocalScript in StarterPlayerScripts.
 -- No ModuleScript, ReplicatedStorage setup or additional files are required.
 -- In Roblox Studio use Play / Play Solo, not the server-only Run mode.
@@ -9,7 +9,7 @@ print("[VantaUI] Example is starting...")
 
 local VantaUI = (function()
 --[[
-    VantaUI 2.2.0
+    VantaUI 3.0.0
     Independent, draggable column panels for Roblox, written in Luau.
 
     Interface only: no game logic, remotes, executor APIs or external HTTP requests.
@@ -25,14 +25,15 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 
 local VantaUI = {}
-VantaUI.Version = "2.2.0"
+VantaUI.Version = "3.0.0"
 
 local MOTION = {
-    Instant = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    Fast = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-    Medium = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-    Slow = TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-    Spring = TweenInfo.new(0.32, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+    Instant = TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    Fast = TweenInfo.new(0.14, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    Medium = TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    Slow = TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+    Spring = TweenInfo.new(0.20, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+    Drag = TweenInfo.new(0.16, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
 }
 
 local function create(className, properties, parent)
@@ -106,16 +107,16 @@ end
 local function makeTheme(options)
     local overrides = options.Theme or {}
     local accent = options.Accent or overrides.Accent or Color3.fromRGB(145, 116, 222)
-    local surface = overrides.Surface or Color3.fromRGB(35, 32, 50)
+    local surface = overrides.Surface or Color3.fromRGB(30, 27, 45)
 
     local theme = {
-        Column = Color3.fromRGB(24, 22, 37),
-        Header = Color3.fromRGB(29, 26, 43),
+        Column = Color3.fromRGB(22, 20, 35),
+        Header = Color3.fromRGB(25, 22, 39),
         Surface = surface,
-        SurfaceHover = Color3.fromRGB(45, 40, 62),
-        Inset = Color3.fromRGB(25, 23, 37),
+        SurfaceHover = Color3.fromRGB(43, 37, 61),
+        Inset = Color3.fromRGB(20, 18, 31),
         Track = Color3.fromRGB(67, 61, 86),
-        Stroke = Color3.fromRGB(93, 80, 128),
+        Stroke = Color3.fromRGB(86, 73, 119),
         Text = Color3.fromRGB(235, 233, 246),
         SubText = Color3.fromRGB(174, 168, 194),
         Muted = Color3.fromRGB(126, 119, 150),
@@ -272,7 +273,7 @@ local function createItem(container, options)
     local window = container.Window
     local theme = window.Theme
     local hasDescription = options.Description ~= nil and options.Description ~= ""
-    local height = options.Height or (hasDescription and 48 or 36)
+    local height = options.Height or (hasDescription and 46 or 34)
 
     local root = create("Frame", {
         Name = (options.Title or "Item") .. "Item",
@@ -294,15 +295,14 @@ local function createItem(container, options)
         Name = "Header",
         Size = UDim2.new(1, 0, 0, height),
         BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.12,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         LayoutOrder = 1,
         Active = false,
     }, root)
-    corner(header, options.Radius or 4)
-    local headerStroke = stroke(header, theme.Stroke, 0.84, 1)
-    local headerScale = create("UIScale", { Scale = 1 }, header)
+    corner(header, options.Radius or 3)
+    local headerStroke = stroke(header, theme.Stroke, 1, 1)
 
     local hitbox = create("TextButton", {
         Name = "Hitbox",
@@ -362,7 +362,6 @@ local function createItem(container, options)
         Root = root,
         Header = header,
         HeaderStroke = headerStroke,
-        HeaderScale = headerScale,
         Hitbox = hitbox,
         Title = title,
         Description = description,
@@ -379,21 +378,31 @@ local function createItem(container, options)
 
     function self:RefreshBackground(animated)
         local color = theme.Surface
+        local backgroundTransparency = 1
+        local borderColor = theme.Stroke
+        local borderTransparency = 1
         if self._active then
-            color = self._hovered and blend(theme.SurfaceActive, theme.Accent, 0.035) or theme.SurfaceActive
+            color = self._hovered and blend(theme.SurfaceActive, theme.Accent, 0.025) or theme.SurfaceActive
+            backgroundTransparency = self._hovered and 0.76 or 0.82
+            borderColor = theme.Accent
+            borderTransparency = 0.72
         elseif self._hovered then
             color = theme.SurfaceHover
+            backgroundTransparency = 0.88
         end
-        local borderColor = self._active and theme.Accent or theme.Stroke
-        local borderTransparency = self._active and 0.58 or (self._hovered and 0.70 or 0.84)
         local titleColor = self._active and theme.AccentText or theme.Text
+        local properties = {
+            BackgroundColor3 = color,
+            BackgroundTransparency = backgroundTransparency,
+        }
         if animated == false then
-            header.BackgroundColor3 = color
+            header.BackgroundColor3 = properties.BackgroundColor3
+            header.BackgroundTransparency = properties.BackgroundTransparency
             headerStroke.Color = borderColor
             headerStroke.Transparency = borderTransparency
             self.Title.TextColor3 = titleColor
         else
-            tween(header, MOTION.Fast, { BackgroundColor3 = color })
+            tween(header, MOTION.Fast, properties)
             tween(headerStroke, MOTION.Fast, {
                 Color = borderColor,
                 Transparency = borderTransparency,
@@ -402,26 +411,16 @@ local function createItem(container, options)
         end
     end
 
-    listen(window, header.MouseEnter, function()
-        self._hovered = true
-        self:RefreshBackground(true)
-    end)
-    listen(window, header.MouseLeave, function()
-        self._hovered = false
-        self:RefreshBackground(true)
-        tween(headerScale, MOTION.Fast, { Scale = 1 })
-    end)
-    listen(window, hitbox.InputBegan, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            self._pressPosition = Vector2.new(input.Position.X, input.Position.Y)
-            tween(headerScale, MOTION.Instant, { Scale = 0.988 })
-        end
-    end)
-    listen(window, hitbox.InputEnded, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            tween(headerScale, MOTION.Spring, { Scale = 1 })
-        end
-    end)
+    if options.Interactive ~= false then
+        listen(window, header.MouseEnter, function()
+            self._hovered = true
+            self:RefreshBackground(true)
+        end)
+        listen(window, header.MouseLeave, function()
+            self._hovered = false
+            self:RefreshBackground(true)
+        end)
+    end
 
     return self
 end
@@ -446,7 +445,7 @@ local function createInlinePanel(component, name, paddingAmount)
     local content = create("CanvasGroup", {
         Name = "Content",
         Size = UDim2.new(1, 0, 0, 0),
-        Position = UDim2.fromOffset(0, -6),
+        Position = UDim2.fromOffset(0, -3),
         BackgroundColor3 = theme.Inset,
         BackgroundTransparency = 0.08,
         BorderSizePixel = 0,
@@ -500,7 +499,7 @@ local function createInlinePanel(component, name, paddingAmount)
                 content.GroupTransparency = 0
             else
                 root.Size = UDim2.new(1, 0, 0, math.min(root.Size.Y.Offset, height))
-                content.Position = UDim2.fromOffset(0, -6)
+                content.Position = UDim2.fromOffset(0, -3)
                 content.GroupTransparency = 1
                 tween(root, MOTION.Medium, { Size = UDim2.new(1, 0, 0, height) })
                 tween(content, MOTION.Medium, {
@@ -516,7 +515,7 @@ local function createInlinePanel(component, name, paddingAmount)
             else
                 tween(root, MOTION.Medium, { Size = UDim2.new(1, 0, 0, 0) })
                 tween(content, MOTION.Fast, {
-                    Position = UDim2.fromOffset(0, -4),
+                    Position = UDim2.fromOffset(0, -2),
                     GroupTransparency = 1,
                 })
                 task.delay(0.27, function()
@@ -624,33 +623,6 @@ function Component:SetActive(state, animated)
     self:RefreshBackground(animated)
 end
 
-function Component:Ripple()
-    local theme = self.Window.Theme
-    local position = self._pressPosition
-    local x = position and position.X - self.Header.AbsolutePosition.X or self.Header.AbsoluteSize.X * 0.5
-    local y = position and position.Y - self.Header.AbsolutePosition.Y or self.Header.AbsoluteSize.Y * 0.5
-    local ripple = create("Frame", {
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromOffset(x, y),
-        Size = UDim2.fromOffset(0, 0),
-        BackgroundColor3 = theme.Accent,
-        BackgroundTransparency = 0.72,
-        BorderSizePixel = 0,
-        ZIndex = 1,
-        Active = false,
-    }, self.Header)
-    corner(ripple, 100)
-    tween(ripple, MOTION.Slow, {
-        Size = UDim2.fromOffset(math.max(120, self.Header.AbsoluteSize.X * 1.2), math.max(120, self.Header.AbsoluteSize.X * 1.2)),
-        BackgroundTransparency = 1,
-    })
-    task.delay(0.40, function()
-        if ripple.Parent then
-            ripple:Destroy()
-        end
-    end)
-end
-
 function Component:SetVisible(state)
     self.Root.Visible = state and true or false
     return self
@@ -728,27 +700,6 @@ function Container:AddToggle(options)
     }, track)
     corner(knob, 6)
 
-    local function pulse()
-        local ring = create("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = knob.Position,
-            Size = UDim2.fromOffset(16, 16),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            ZIndex = 6,
-            Active = false,
-        }, track)
-        corner(ring, 8)
-        local ringStroke = stroke(ring, theme.Accent, 0.25, 1.5)
-        tween(ring, MOTION.Slow, { Size = UDim2.fromOffset(34, 34) })
-        tween(ringStroke, MOTION.Slow, { Transparency = 1 })
-        task.delay(0.40, function()
-            if ring.Parent then
-                ring:Destroy()
-            end
-        end)
-    end
-
     local function update(state, animated, notify)
         state = state and true or false
         local changed = value ~= state
@@ -765,9 +716,6 @@ function Container:AddToggle(options)
         else
             tween(track, MOTION.Medium, { BackgroundColor3 = state and theme.Accent or theme.Track })
             tween(knob, MOTION.Spring, properties)
-            if changed then
-                pulse()
-            end
         end
         if notify and changed then
             safeCallback(options.Callback, value)
@@ -813,7 +761,6 @@ function Container:AddButton(options)
     end
 
     listen(self.Window, component.Hitbox.Activated, function()
-        component:Ripple()
         component:SetActive(true, true)
         task.delay(0.18, function()
             if not component._destroyed and not component.Window._destroyed then
@@ -972,7 +919,7 @@ function Container:AddSlider(options)
             dragging = true
             dragInput = input
             updateFromX(input.Position.X)
-            tween(knobScale, MOTION.Spring, { Scale = 1.25 })
+            tween(knobScale, MOTION.Fast, { Scale = 1.12 })
             tween(component.HeaderStroke, MOTION.Fast, { Color = theme.Accent, Transparency = 0.45 })
         end
     end)
@@ -988,12 +935,12 @@ function Container:AddSlider(options)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input == dragInput) then
             dragging = false
             dragInput = nil
-            tween(knobScale, MOTION.Spring, { Scale = 1 })
+            tween(knobScale, MOTION.Fast, { Scale = 1 })
             component:RefreshBackground(true)
         end
     end)
     listen(self.Window, hitbox.MouseEnter, function()
-        tween(knobScale, MOTION.Fast, { Scale = 1.12 })
+        tween(knobScale, MOTION.Fast, { Scale = 1.06 })
     end)
     listen(self.Window, hitbox.MouseLeave, function()
         if not dragging then
@@ -1448,9 +1395,9 @@ function Container:AddLabel(options)
     options = options or {}
     options.Title = options.Title or options.Name or "Label"
     options.Interactive = false
-    options.Height = options.Height or (options.Description and 48 or 32)
+    options.Height = options.Height or (options.Description and 46 or 32)
     local component = createItem(self, options)
-    component.Header.BackgroundTransparency = 0.25
+    component.Header.BackgroundTransparency = 1
     return finalize(self, component, options)
 end
 
@@ -1637,6 +1584,230 @@ function Window:LayoutCategories()
     end
 end
 
+local LOCAL_BLUR_DEPTH = 0.02
+local LOCAL_BLUR_SCALE = 6.8
+local LOCAL_GLASS_OPACITY = 0.02
+local LOCAL_PART_THICKNESS = 0.001
+
+local function updateCategoryMotion(category, deltaTime)
+    local frame = category.Root
+    local target = category._targetPosition
+    if not target or not frame.Parent then
+        return
+    end
+
+    local currentX = frame.Position.X.Offset
+    local currentY = frame.Position.Y.Offset
+    local velocityX = category._velocityX or 0
+    local velocityY = category._velocityY or 0
+    local offsetX = currentX - target.X
+    local offsetY = currentY - target.Y
+
+    if math.abs(offsetX) < 0.02 and math.abs(offsetY) < 0.02
+        and math.abs(velocityX) < 0.05 and math.abs(velocityY) < 0.05 then
+        if currentX ~= target.X or currentY ~= target.Y then
+            frame.Position = UDim2.fromOffset(target.X, target.Y)
+        end
+        category._velocityX = 0
+        category._velocityY = 0
+        return
+    end
+
+    -- Exact critically damped spring. Unlike explicit Euler integration this
+    -- remains stable after frame spikes and never overshoots the pointer.
+    local frequency = category._dragging and 34 or 26
+    local step = math.min(deltaTime, 0.1)
+    local decay = math.exp(-frequency * step)
+    local coefficientX = velocityX + frequency * offsetX
+    local coefficientY = velocityY + frequency * offsetY
+    local nextOffsetX = (offsetX + coefficientX * step) * decay
+    local nextOffsetY = (offsetY + coefficientY * step) * decay
+
+    category._velocityX = (velocityX - frequency * coefficientX * step) * decay
+    category._velocityY = (velocityY - frequency * coefficientY * step) * decay
+    frame.Position = UDim2.fromOffset(target.X + nextOffsetX, target.Y + nextOffsetY)
+end
+
+local function makeLocalGlassPart(name, shape, parent)
+    return create("Part", {
+        Name = name,
+        Anchored = true,
+        CanCollide = false,
+        CanQuery = false,
+        CanTouch = false,
+        CastShadow = false,
+        Color = Color3.new(0.64, 0.635, 0.65),
+        Material = Enum.Material.Glass,
+        Shape = shape,
+        Size = Vector3.new(LOCAL_PART_THICKNESS, LOCAL_PART_THICKNESS, LOCAL_PART_THICKNESS),
+        Transparency = 1,
+        TopSurface = Enum.SurfaceType.Smooth,
+        BottomSurface = Enum.SurfaceType.Smooth,
+    }, parent)
+end
+
+local function ensureLocalBlurContainer(window)
+    if not window._localBlur or window._destroyed then
+        return nil
+    end
+    local camera = Workspace.CurrentCamera
+    if not camera then
+        return nil
+    end
+    if not window._blurContainer or not window._blurContainer.Parent then
+        window._blurContainer = create("Folder", {
+            Name = window._blurName .. "_Geometry",
+        }, camera)
+    elseif window._blurContainer.Parent ~= camera then
+        window._blurContainer.Parent = camera
+    end
+    return window._blurContainer
+end
+
+local function ensureCategoryBlur(category)
+    if category._blur and not category._blur.Model.Parent then
+        category._blur = nil
+    end
+    if category._blur then
+        return category._blur
+    end
+    local window = category.Window
+    local container = ensureLocalBlurContainer(window)
+    if not container or not category.Root.Parent then
+        return nil
+    end
+
+    local model = create("Model", {
+        Name = category.Root.Name .. "_Backdrop",
+    }, container)
+    local data = {
+        Model = model,
+        Vertical = makeLocalGlassPart("Vertical", Enum.PartType.Block, model),
+        Horizontal = makeLocalGlassPart("Horizontal", Enum.PartType.Block, model),
+        Corners = {},
+        Transparency = 1,
+        Hidden = true,
+    }
+    for index = 1, 4 do
+        data.Corners[index] = makeLocalGlassPart("Corner" .. index, Enum.PartType.Cylinder, model)
+    end
+    category._blur = data
+    return data
+end
+
+local function setLocalBlurTransparency(data, transparency)
+    if data.Transparency == transparency then
+        return
+    end
+    data.Transparency = transparency
+    data.Vertical.Transparency = transparency
+    data.Horizontal.Transparency = transparency
+    for _, part in ipairs(data.Corners) do
+        part.Transparency = transparency
+    end
+end
+
+local function setPartTransform(part, size, cframe)
+    if part.Size ~= size then
+        part.Size = size
+    end
+    if part.CFrame ~= cframe then
+        part.CFrame = cframe
+    end
+end
+
+local function updateCategoryBlur(category)
+    local window = category.Window
+    if not window._localBlur then
+        return
+    end
+    local data = ensureCategoryBlur(category)
+    if not data then
+        return
+    end
+
+    local frame = category.Root
+    local camera = Workspace.CurrentCamera
+    local shouldRender = window._visible
+        and category._visible
+        and window._depthOfField ~= nil
+        and window._depthOfField.Parent ~= nil
+        and frame.Visible
+        and frame.Parent ~= nil
+        and camera ~= nil
+
+    if not shouldRender then
+        if not data.Hidden then
+            setLocalBlurTransparency(data, 1)
+            data.Hidden = true
+        end
+        return
+    end
+
+    local absolutePosition = frame.AbsolutePosition
+    local absoluteSize = frame.AbsoluteSize
+    if absoluteSize.X <= 0 or absoluteSize.Y <= 0 or camera.ViewportSize.Y <= 0 then
+        setLocalBlurTransparency(data, 1)
+        data.Hidden = true
+        return
+    end
+
+    data.Hidden = false
+    setLocalBlurTransparency(data, 1 - LOCAL_GLASS_OPACITY * (1 - frame.GroupTransparency))
+
+    -- Only the projected glass geometry is near the camera. FarIntensity = 0
+    -- keeps the actual game world sharp; there is no full-screen BlurEffect.
+    local centerX = absolutePosition.X + absoluteSize.X * 0.5
+    local centerY = absolutePosition.Y + absoluteSize.Y * 0.5
+    local ray = camera:ScreenPointToRay(centerX, centerY, LOCAL_BLUR_DEPTH)
+    local center = ray.Origin + ray.Direction * LOCAL_BLUR_DEPTH
+    local scaleFactor = LOCAL_BLUR_SCALE
+        * LOCAL_BLUR_DEPTH
+        * math.tan(math.rad(camera.FieldOfView * 0.5))
+        * 2
+        / camera.ViewportSize.Y
+    local width = absoluteSize.X * scaleFactor
+    local height = absoluteSize.Y * scaleFactor
+    local mainCFrame = CFrame.new(center, center - camera.CFrame.LookVector)
+        * CFrame.Angles(0, 0, math.rad(frame.AbsoluteRotation))
+
+    local cornerRadius = 0
+    if category._corner then
+        local radius = category._corner.CornerRadius
+        cornerRadius = radius.Offset + radius.Scale * math.min(absoluteSize.X, absoluteSize.Y)
+    end
+    local radius = clamp(cornerRadius * scaleFactor, 0, math.min(width, height) * 0.5)
+    radius = math.max(radius, LOCAL_PART_THICKNESS)
+
+    setPartTransform(
+        data.Vertical,
+        Vector3.new(math.max(width - radius * 2, LOCAL_PART_THICKNESS), height, LOCAL_PART_THICKNESS),
+        mainCFrame
+    )
+    setPartTransform(
+        data.Horizontal,
+        Vector3.new(width, math.max(height - radius * 2, LOCAL_PART_THICKNESS), LOCAL_PART_THICKNESS),
+        mainCFrame
+    )
+
+    local cornerSize = Vector3.new(LOCAL_PART_THICKNESS, radius * 2, radius * 2)
+    local offsetX = width * 0.5 - radius
+    local offsetY = height * 0.5 - radius
+    local signs = {
+        { -1, 1 },
+        { 1, 1 },
+        { -1, -1 },
+        { 1, -1 },
+    }
+    for index, part in ipairs(data.Corners) do
+        local sign = signs[index]
+        local cframe = mainCFrame
+            * CFrame.new(sign[1] * offsetX, sign[2] * offsetY, 0)
+            * CFrame.Angles(0, math.pi * 0.5, 0)
+        setPartTransform(part, cornerSize, cframe)
+    end
+end
+
 function Window:AddCategory(options)
     options = options or {}
     local theme = self.Theme
@@ -1650,7 +1821,7 @@ function Window:AddCategory(options)
         Position = options.Position or UDim2.fromOffset(16, self._columnY),
         Size = UDim2.fromOffset(width, 51),
         BackgroundColor3 = theme.Column,
-        BackgroundTransparency = 0.18,
+        BackgroundTransparency = 0.28,
         BorderSizePixel = 0,
         GroupTransparency = 1,
         ClipsDescendants = true,
@@ -1658,9 +1829,9 @@ function Window:AddCategory(options)
         Active = true,
         ZIndex = 10 + index,
     }, self.Gui)
-    corner(frame, 5)
-    local panelStroke = stroke(frame, theme.Stroke, 0.42, 1)
-    local scale = create("UIScale", { Scale = 0.97 }, frame)
+    local panelCorner = corner(frame, 5)
+    local panelStroke = stroke(frame, theme.Stroke, 0.55, 1)
+    local scale = create("UIScale", { Scale = 1 }, frame)
 
     local header = create("Frame", {
         Name = "Header",
@@ -1671,24 +1842,17 @@ function Window:AddCategory(options)
         ZIndex = 20,
     }, frame)
 
-    -- The gradient has its own background object, so it can never tint the
-    -- title or any other descendant of the category CanvasGroup.
+    -- A restrained flat header band; no gradient or tint on descendants.
     local headerBackground = create("Frame", {
         Name = "Background",
         Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = theme.Header,
+        BackgroundTransparency = 0.48,
         BorderSizePixel = 0,
         Active = false,
         ZIndex = 20,
     }, header)
     corner(headerBackground, 5)
-    create("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, blend(theme.Header, theme.Accent, 0.09)),
-            ColorSequenceKeypoint.new(1, theme.Header),
-        }),
-        Rotation = 20,
-    }, headerBackground)
     create("Frame", {
         Name = "Divider",
         Position = UDim2.fromOffset(0, 37),
@@ -1700,18 +1864,16 @@ function Window:AddCategory(options)
         ZIndex = 21,
     }, header)
 
-    local titleX = 10
     if options.Icon then
         local icon = makeIcon(header, options.Icon, theme.AccentText, 16)
         icon.Position = UDim2.fromOffset(10, 11)
         icon.ZIndex = 23
-        titleX = 34
     end
 
     local title = makeText(header, options.Title or "Category", 14, theme.Text, Enum.Font.BuilderSansMedium)
-    title.Position = UDim2.fromOffset(titleX, 0)
-    title.Size = UDim2.new(1, -(titleX + 12), 1, 0)
-    title.TextXAlignment = options.Icon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
+    title.Position = UDim2.new()
+    title.Size = UDim2.fromScale(1, 1)
+    title.TextXAlignment = Enum.TextXAlignment.Center
     title.ZIndex = 23
 
     local body = create("ScrollingFrame", {
@@ -1733,7 +1895,7 @@ function Window:AddCategory(options)
     local bodyLayout = create("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 3),
+        Padding = UDim.new(0, 1),
     }, body)
     padding(body, 1, 2, 0, 4)
 
@@ -1744,6 +1906,7 @@ function Window:AddCategory(options)
         Header = header,
         Title = title,
         Border = panelStroke,
+        _corner = panelCorner,
         _scale = scale,
         _targetPosition = nil,
         _velocityX = 0,
@@ -1757,6 +1920,12 @@ function Window:AddCategory(options)
         _order = 0,
         _items = {},
     }, Category)
+    listen(self, frame.Destroying, function()
+        if category._blur then
+            category._blur.Model:Destroy()
+            category._blur = nil
+        end
+    end)
 
     local function updateHeight(animated)
         if not frame.Parent then
@@ -1789,11 +1958,11 @@ function Window:AddCategory(options)
 
     local function setDragVisual(active)
         category._dragging = active
-        tween(scale, MOTION.Medium, { Scale = active and 1.018 or 1 })
-        tween(frame, MOTION.Medium, { BackgroundTransparency = active and 0.10 or 0.18 })
+        tween(scale, MOTION.Drag, { Scale = active and 1.006 or 1 })
+        tween(frame, MOTION.Drag, { BackgroundTransparency = active and 0.22 or 0.28 })
         tween(panelStroke, MOTION.Fast, {
-            Color = active and theme.AccentText or theme.Stroke,
-            Transparency = active and 0.24 or 0.42,
+            Color = active and theme.Accent or theme.Stroke,
+            Transparency = active and 0.48 or 0.55,
         })
     end
 
@@ -1812,7 +1981,8 @@ function Window:AddCategory(options)
             dragging = true
             dragInput = input
             dragStart = input.Position
-            startPosition = category._targetPosition or Vector2.new(frame.Position.X.Offset, frame.Position.Y.Offset)
+            startPosition = Vector2.new(frame.Position.X.Offset, frame.Position.Y.Offset)
+            category._targetPosition = startPosition
             self._zOrder = self._zOrder + 1
             frame.ZIndex = 20 + self._zOrder
             setDragVisual(true)
@@ -1826,7 +1996,7 @@ function Window:AddCategory(options)
             local delta = input.Position - dragStart
             category._positioned = true
             -- Only the spring target changes here. The rendered position is
-            -- integrated on Heartbeat, so pickup, movement and release share
+            -- integrated on PreRender, so pickup, movement and release share
             -- one continuous motion instead of snapping to the pointer.
             category._targetPosition = Vector2.new(
                 startPosition.X + delta.X,
@@ -1838,48 +2008,6 @@ function Window:AddCategory(options)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input == dragInput) then
             endDrag()
         end
-    end)
-
-    -- Damped spring with a capped timestep. Keeping the
-    -- velocity between frames avoids discontinuities when the cursor changes
-    -- direction and lets the panel settle naturally after release.
-    listen(self, RunService.Heartbeat, function(deltaTime)
-        if self._destroyed or not frame.Parent then
-            return
-        end
-        local target = category._targetPosition
-        if not target then
-            return
-        end
-
-        local currentX = frame.Position.X.Offset
-        local currentY = frame.Position.Y.Offset
-        local velocityX = category._velocityX or 0
-        local velocityY = category._velocityY or 0
-        local offsetX = target.X - currentX
-        local offsetY = target.Y - currentY
-
-        if math.abs(offsetX) < 0.02 and math.abs(offsetY) < 0.02
-            and math.abs(velocityX) < 0.05 and math.abs(velocityY) < 0.05 then
-            if currentX ~= target.X or currentY ~= target.Y then
-                frame.Position = UDim2.fromOffset(target.X, target.Y)
-            end
-            category._velocityX = 0
-            category._velocityY = 0
-            return
-        end
-
-        local step = math.min(deltaTime, 1 / 30)
-        local stiffness = 260
-        local damping = 28
-        velocityX = velocityX + (offsetX * stiffness - velocityX * damping) * step
-        velocityY = velocityY + (offsetY * stiffness - velocityY * damping) * step
-        currentX = currentX + velocityX * step
-        currentY = currentY + velocityY * step
-
-        category._velocityX = velocityX
-        category._velocityY = velocityY
-        frame.Position = UDim2.fromOffset(currentX, currentY)
     end)
 
     table.insert(self.Categories, category)
@@ -1914,14 +2042,12 @@ function Category:SetVisible(state, instant)
     if state then
         self.Root.Visible = true
         self._updateHeight(false)
+        self._scale.Scale = 1
         if instant then
             self.Root.GroupTransparency = 0
-            self._scale.Scale = 1
         else
             self.Root.GroupTransparency = 1
-            self._scale.Scale = 0.97
             tween(self.Root, MOTION.Medium, { GroupTransparency = 0 })
-            tween(self._scale, MOTION.Slow, { Scale = 1 })
         end
     else
         if instant then
@@ -1929,8 +2055,7 @@ function Category:SetVisible(state, instant)
             self.Root.GroupTransparency = 1
         else
             tween(self.Root, MOTION.Fast, { GroupTransparency = 1 })
-            tween(self._scale, MOTION.Fast, { Scale = 0.98 })
-            task.delay(0.18, function()
+            task.delay(0.15, function()
                 if self._visibilityRevision == revision and not self._visible then
                     self.Root.Visible = false
                 end
@@ -1978,45 +2103,42 @@ function Window:SetVisible(state, instant)
     self._visibilityRevision = self._visibilityRevision + 1
     local revision = self._visibilityRevision
 
-    for index, category in ipairs(self.Categories) do
-        local delay = instant and 0 or (index - 1) * (state and 0.025 or 0.015)
-        if delay > 0 then
-            task.delay(delay, function()
-                if self._visibilityRevision == revision and not self._destroyed then
-                    category:SetVisible(state)
-                end
-            end)
-        else
-            category:SetVisible(state, instant)
-        end
+    for _, category in ipairs(self.Categories) do
+        category:SetVisible(state, instant)
     end
 
-    if state and self._blurSize > 0 then
-        if not self._blur or not self._blur.Parent then
-            self._blur = create("BlurEffect", {
+    if state and self._localBlur then
+        if not self._depthOfField or not self._depthOfField.Parent then
+            self._depthOfField = create("DepthOfFieldEffect", {
                 Name = self._blurName,
-                Size = 0,
+                FarIntensity = 0,
+                FocusDistance = 0,
+                InFocusRadius = 0,
+                NearIntensity = 0,
                 Enabled = true,
             }, Lighting)
         end
         if instant then
-            self._blur.Size = self._blurSize
+            self._depthOfField.NearIntensity = 1
         else
-            tween(self._blur, MOTION.Medium, { Size = self._blurSize })
+            tween(self._depthOfField, MOTION.Fast, { NearIntensity = 1 })
         end
-    elseif not state and self._blur then
+    elseif not state and self._depthOfField then
         if instant then
-            self._blur:Destroy()
-            self._blur = nil
+            self._depthOfField:Destroy()
+            self._depthOfField = nil
         else
-            tween(self._blur, MOTION.Fast, { Size = 0 })
-            task.delay(0.18, function()
-                if self._visibilityRevision == revision and not self._visible and self._blur then
-                    self._blur:Destroy()
-                    self._blur = nil
+            tween(self._depthOfField, MOTION.Fast, { NearIntensity = 0 })
+            task.delay(0.15, function()
+                if self._visibilityRevision == revision and not self._visible and self._depthOfField then
+                    self._depthOfField:Destroy()
+                    self._depthOfField = nil
                 end
             end)
         end
+    end
+    for _, category in ipairs(self.Categories) do
+        updateCategoryBlur(category)
     end
     return self
 end
@@ -2033,9 +2155,13 @@ local function cleanupWindow(window)
         end
     end
     window._connections = {}
-    if window._blur then
-        window._blur:Destroy()
-        window._blur = nil
+    if window._depthOfField then
+        window._depthOfField:Destroy()
+        window._depthOfField = nil
+    end
+    if window._blurContainer then
+        window._blurContainer:Destroy()
+        window._blurContainer = nil
     end
 end
 
@@ -2096,10 +2222,17 @@ function VantaUI:CreateWindow(options)
         _columnHeight = options.ColumnHeight or 500,
         _columnGap = options.ColumnGap or 10,
         _columnY = options.ColumnY or options.Y or 64,
-        _blurSize = clamp(options.Blur or 8, 0, 24),
-        _blurName = guiName .. "_Blur",
+        _localBlur = true,
+        _blurName = guiName .. "_LocalBlur",
+        _depthOfField = nil,
+        _blurContainer = nil,
         _zOrder = 0,
     }, Window)
+    local blurOption = options.LocalBlur
+    if blurOption == nil then
+        blurOption = options.Blur -- Backward-compatible boolean/number option.
+    end
+    self._localBlur = blurOption ~= false and blurOption ~= 0
 
     listen(self, gui.Destroying, function()
         if not self._destroyed then
@@ -2138,9 +2271,20 @@ function VantaUI:CreateWindow(options)
     end
     listen(self, Workspace:GetPropertyChangedSignal("CurrentCamera"), function()
         bindCamera()
+        ensureLocalBlurContainer(self)
         self:LayoutCategories()
     end)
     bindCamera()
+    ensureLocalBlurContainer(self)
+    listen(self, RunService.PreRender, function(deltaTime)
+        if self._destroyed then
+            return
+        end
+        for _, category in ipairs(self.Categories) do
+            updateCategoryMotion(category, deltaTime)
+            updateCategoryBlur(category)
+        end
+    end)
 
     local toggleKey = Enum.KeyCode.RightShift
     if options.ToggleKey ~= nil then
@@ -2224,7 +2368,7 @@ local window = VantaUI:CreateWindow({
     ColumnGap = 10,
     ColumnY = 64,
     ToggleKey = Enum.KeyCode.RightShift,
-    Blur = 10,
+    LocalBlur = true,
 })
 
 local combat = window:AddCategory({ Title = "Combat", Icon = "combat" })
@@ -2308,13 +2452,17 @@ end)
 
 combat:AddToggle({ Title = "Auto Armor", Default = true })
 combat:AddToggle({ Title = "Criticals", Default = false })
+combat:AddToggle({ Title = "Auto Explosion", Default = false })
+combat:AddToggle({ Title = "Fast Bow", Default = true })
+combat:AddToggle({ Title = "Hit Boxes", Default = false })
+combat:AddToggle({ Title = "Auto Totem", Default = true })
 combat:AddButton({
     Title = "Test notification",
     RightText = "Run",
     Callback = function()
         window:Notify({
             Title = "Combat",
-            Content = "Buttons include press, ripple and state animations.",
+            Content = "Buttons use short, quiet state transitions.",
             Type = "Success",
             Duration = 3,
         })
@@ -2345,6 +2493,9 @@ end)
 
 movement:AddToggle({ Title = "Auto Sprint", Default = true })
 movement:AddToggle({ Title = "No Slow Down", Default = false })
+movement:AddToggle({ Title = "Edge Jump", Default = true })
+movement:AddToggle({ Title = "No Jump Delay", Default = false })
+movement:AddToggle({ Title = "No Push", Default = false })
 movement:AddSlider({
     Title = "Walk Speed",
     Min = 8,
@@ -2371,6 +2522,9 @@ player:AddTextbox({
 })
 player:AddToggle({ Title = "Auto Leave", Default = false })
 player:AddToggle({ Title = "Free Camera", Default = false })
+player:AddToggle({ Title = "Auto Eat", Default = true })
+player:AddToggle({ Title = "Auto Tool", Default = false })
+player:AddToggle({ Title = "Anti AFK", Default = true })
 player:AddDropdown({
     Title = "Camera mode",
     Values = { "First person", "Third person", "Orbit" },
@@ -2399,9 +2553,12 @@ utility:AddDropdown({
 })
 utility:AddToggle({ Title = "Client Sounds", Default = true })
 utility:AddToggle({ Title = "Middle Click", Default = false })
+utility:AddToggle({ Title = "Auto Respawn", Default = true })
+utility:AddToggle({ Title = "Click Teleport", Default = false })
+utility:AddToggle({ Title = "Config Autosave", Default = true })
 utility:AddSeparator()
 utility:AddLabel({
-    Title = "VantaUI 2.2",
+    Title = "VantaUI 3.0",
     Description = "Independent draggable panels",
 })
 
@@ -2429,6 +2586,9 @@ render:AddToggle({
 render:AddToggle({ Title = "Trails", Default = false })
 render:AddToggle({ Title = "World Ambience", Default = true })
 render:AddToggle({ Title = "HUD", Default = true })
+render:AddToggle({ Title = "Nametags", Default = true })
+render:AddToggle({ Title = "Tracers", Default = false })
+render:AddToggle({ Title = "Entity ESP", Default = true })
 render:AddButton({
     Title = "Success toast",
     Callback = function()

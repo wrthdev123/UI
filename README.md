@@ -1,49 +1,71 @@
-# VantaUI 2.2
+# VantaUI 3.0
 
-UI-библиотека для Roblox на **Luau**, собранная по мотивам присланных референсов. Каждая категория — **отдельная независимая панель**, а не колонка внутри общего окна. Панели можно перетаскивать за заголовки: pickup, движение и release объединены в непрерывную spring-анимацию. Настройки раскрываются прямо внутри своей панели и плавно сдвигают остальные элементы. В версии 2.2 увеличена типографика, добавлены полупрозрачный glass-фон, заметный blur и настоящие Lucide-иконки.
+A self-contained Roblox Luau interface library for **five independent, draggable columns** with inline settings. The dark-violet presentation uses flat rows, thin borders, readable BuilderSans typography and genuine Lucide sprite icons — without a full-window wrapper or a vertical selected-state strip.
 
-## Файлы
+`Example.client.lua` contains the **complete library and a five-column demo in one LocalScript**. It needs no ModuleScript, asset upload, package manager or additional file.
 
-- [`VantaUI.lua`](VantaUI.lua) — самодостаточная библиотека для подключения через `require` как **ModuleScript**.
-- [`Example.client.lua`](Example.client.lua) — **полностью автономный LocalScript**: библиотека уже встроена в файл, поэтому для демо нужен только он.
-- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) — attribution и лицензии Lucide / lucide-roblox. Те же notices встроены в оба Lua-файла, поэтому они сохраняются при копировании одного standalone-скрипта.
+## Highlights
 
-## Быстрый запуск демо
+- Five separate `CanvasGroup` panels; each can be dragged independently.
+- **Local blur behind the columns only** — no fullscreen `BlurEffect`.
+- Exact critically damped drag motion with distinct pickup, movement and release states; no spring overshoot.
+- Flat 34 px rows, 46 px descriptive rows, 13 px labels and 42 px toggles.
+- Inline settings push following rows down in the same column.
+- 14 Roblox-hosted Lucide mappings, with BuilderSans UI fonts.
+- Toggle, slider, dropdown, keybind, textbox, color picker, button, label, separator and notification APIs.
+- Config flags, `GetFlag`, `SetFlag`, programmatic setters and automatic theme-color tracking.
+- Complete cleanup of input/render connections, camera geometry and lighting effects.
 
-1. В Roblox Studio создайте `LocalScript` в `StarterPlayer > StarterPlayerScripts`.
-2. Вставьте в него **весь** `Example.client.lua`. Отдельно копировать `VantaUI.lua` и создавать `ModuleScript` для этого варианта не нужно.
-3. Нажмите **Play / Play Solo**, а не серверный режим **Run**.
-4. После появления интерфейса используйте `Right Shift`, чтобы скрыть или снова показать его.
+## Local blur: what it does
 
-В `Output` должны появиться сообщения `[VantaUI] Example is starting...` и `[VantaUI] Example ready...`.
+VantaUI 3 uses a client-only projected Glass renderer instead of `Lighting.BlurEffect`:
 
-## Подключение библиотеки к своему проекту
+- Each panel owns two thin Glass rectangles and four rounded-corner pieces.
+- Those six parts are projected in front of the current camera and follow the panel's absolute position, size, rotation and drag scale in `RunService.PreRender`.
+- A near-only `DepthOfFieldEffect` uses `FarIntensity = 0`, so the rest of the 3D viewport is not globally blurred.
+- Hidden panels make their backdrop transparent. `Destroy()` removes all models and the post-effect.
 
-1. Создайте `ModuleScript` в `ReplicatedStorage`, назовите его `VantaUI` и вставьте содержимое `VantaUI.lua`.
-2. Подключите модуль из своего LocalScript-а через `require`, как показано ниже.
+### Roblox rendering limitations
 
-Библиотека использует только обычные Roblox API. Не нужны executor-функции, HTTP-запросы или дополнительные зависимости. Lucide-спрайты загружаются через уже встроенные Roblox-hosted `rbxassetid://` и координаты `ImageRectOffset`; внешние SVG-URL не используются.
+This is a Glass/DepthOfField technique, not the unreleased native `UIBlur` API:
 
-## Минимальный модульный пример
+- A visible Glass blur generally requires **Roblox graphics quality 8 or higher**. Lower quality levels may show little or no blur.
+- It blurs the **3D scene behind a panel**, not other ordinary `ScreenGui` elements drawn over that scene.
+- Glass can pick up environment reflections. VantaUI uses 98% transparency and a neutral color to keep this subtle.
+- Set `LocalBlur = false` to disable the projected geometry and DepthOfField effect entirely; the interface remains fully usable.
+
+No Studio rendering claim is made by the command-line tests: final Glass appearance and sprite loading should still be checked in Roblox Studio Play mode on the target graphics settings.
+
+## Fastest start — one LocalScript
+
+1. Open the complete [`Example.client.lua`](Example.client.lua).
+2. Copy the **entire file**, including the embedded library and Lucide notices.
+3. In Roblox Studio, create a **LocalScript** in `StarterPlayer > StarterPlayerScripts`.
+4. Paste and use **Play / Play Solo**, not the server-only Run mode.
+
+The demo creates Combat, Movement, Visuals, Player and Miscellaneous columns. It includes working inline settings, controls, notifications and drag interactions.
+
+A minimal standalone setup looks like this when the library is already available:
 
 ```lua
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VantaUI = require(ReplicatedStorage:WaitForChild("VantaUI"))
+local VantaUI = require(game.ReplicatedStorage.VantaUI)
 
 local window = VantaUI:CreateWindow({
     Name = "VantaUI",
     Accent = Color3.fromRGB(145, 116, 222),
     ColumnWidth = 210,
     ColumnHeight = 500,
+    ColumnGap = 10,
     ColumnY = 64,
+    LocalBlur = true,
     ToggleKey = Enum.KeyCode.RightShift,
-    Blur = 10,
 })
 
-local combat = window:AddCategory({
-    Title = "Combat",
-    Icon = "combat",
-})
+local combat = window:AddCategory({ Title = "Combat", Icon = "combat" })
+local movement = window:AddCategory({ Title = "Movement", Icon = "movement" })
+local visuals = window:AddCategory({ Title = "Visuals", Icon = "visuals" })
+local player = window:AddCategory({ Title = "Player", Icon = "player" })
+local misc = window:AddCategory({ Title = "Miscellaneous", Icon = "misc" })
 
 local aura = combat:AddToggle({
     Title = "Kill Aura",
@@ -52,7 +74,7 @@ local aura = combat:AddToggle({
     Default = true,
     Flag = "combat.aura",
     Callback = function(enabled)
-        print("Enabled:", enabled)
+        print("Kill Aura:", enabled)
     end,
 })
 
@@ -62,7 +84,6 @@ aura:AddSettings(function(settings)
         Values = { "Single", "Multi", "Priority" },
         Default = "Priority",
     })
-
     settings:AddSlider({
         Title = "Range",
         Min = 1,
@@ -70,204 +91,223 @@ aura:AddSettings(function(settings)
         Step = 0.25,
         Default = 4.5,
         Suffix = " m",
+        Flag = "combat.range",
+    })
+    settings:AddKeybind({
+        Title = "Toggle bind",
+        Default = Enum.KeyCode.R,
+        Callback = function()
+            aura:Set(not aura:Get())
+        end,
     })
 end)
 ```
 
-## Что реализовано
+`Blur = 10` from VantaUI 2 is accepted only as a backward-compatible on/off option. It no longer creates a fullscreen blur; new code should use `LocalBlur = true` or `false`.
 
-- Пять независимых панелей без общего окна, backdrop или затемняющего градиента.
-- Читаемая тёмно-фиолетовая тема, Builder Sans, основной текст 13 px, увеличенные строки и контролы.
-- Спокойный selected-state без сплошной яркой заливки и без вертикальной полоски слева.
-- Настоящие Lucide-иконки категорий, компонентов и настроек через Roblox-hosted 48 px sprite sheets.
-- Полупрозрачные панели и animated `BlurEffect`; в примере `Blur = 10`.
-- Перетаскивание каждой панели за её заголовок мышью или касанием.
-- Pickup scale/highlight, инерционное движение на `RunService.Heartbeat` и плавное доведение позиции после release.
-- Автоматическая высота панели и вертикальная прокрутка после достижения `ColumnHeight`.
-- Stagger-анимация показа и скрытия всех панелей через `Right Shift`.
-- Hover, press, ripple, toggle pulse, spring-движение переключателей и slider-ручек.
-- Inline settings с одновременной анимацией высоты, прозрачности и положения содержимого.
-- Dropdown также раскрывается внутри своей панели.
-- Уведомления с enter/exit-анимацией и индикатором времени.
-- Flags для чтения и изменения значений из другого кода.
-- Очистка соединений, GUI и blur через `window:Destroy()`.
+## Module installation
 
+If you prefer separate files:
 
-## Glass, blur и перетаскивание
+1. Create a **ModuleScript** named `VantaUI` in `ReplicatedStorage` and paste `VantaUI.lua`.
+2. Create a **LocalScript** in `StarterPlayerScripts`.
+3. Require the module and call `CreateWindow` as above.
 
-Каждая категория остаётся отдельным top-level `CanvasGroup`. Её фон частично прозрачен, поэтому размытый мир виден сквозь панель. `BlurEffect` в Roblox размывает 3D-мир глобально, а не создаёт отдельный render target для каждого столбца; эффект автоматически удаляется при скрытии интерфейса и `Destroy()`.
+To run the library from a GitHub raw URL, replace the commit below with the revision you intentionally want to pin:
 
-Во время drag изменяется только целевая позиция. Фактическая позиция интегрируется на каждом `Heartbeat` с сохранением скорости между кадрами. Поэтому резкая смена направления не даёт скачка, а после отпускания панель продолжает движение и мягко останавливается. При захвате добавляются небольшие scale и подсветка границы; при отпускании они возвращаются к обычному состоянию.
+```lua
+local REVISION = "PIN_A_COMMIT_SHA"
+local VantaUI = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/wrthdev123/UI/" .. REVISION .. "/VantaUI.lua"
+))()
+```
 
-## Лицензии иконок
+HTTP loading requires an environment that permits `loadstring` and `HttpGet`. Copying the source into Studio needs neither.
 
-Использованы sprite mappings из [lucide-roblox](https://github.com/latte-soft/lucide-roblox) (MIT, Latte Softworks) и иконки [Lucide](https://lucide.dev) (ISC). Полные notices находятся в [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) и встроены непосредственно в `VantaUI.lua` / `Example.client.lua`.
-
-## API
+## Window API
 
 ### `VantaUI:CreateWindow(options)`
 
-| Параметр | Тип / значение по умолчанию | Назначение |
-|---|---|---|
-| `Name` | `"VantaUI"` | Имя ScreenGui |
-| `Accent` | `Color3.fromRGB(145, 116, 222)` | Акцентный цвет |
-| `Theme` | `nil` | Таблица переопределений цветов |
-| `ColumnWidth` | `210` | Ширина новых панелей |
-| `ColumnHeight` | `500` | Максимальная высота панели |
-| `ColumnGap` | `10` | Расстояние между панелями |
-| `ColumnY` | `64` | Вертикальная позиция автоматического ряда |
-| `ToggleKey` | `RightShift` | Клавиша видимости; `false` отключает |
-| `Blur` | `8` | Blur мира от `0` до `24`; `0` отключает |
-| `Visible` | `true` | Показать панели после создания |
-| `ReplaceExisting` | `true` | Удалить предыдущий ScreenGui с тем же именем |
-| `Parent` | `PlayerGui` | Другой контейнер для ScreenGui |
+Important options:
 
-Методы окна:
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `Parent` | `LocalPlayer.PlayerGui` | Custom GUI parent, useful for tests |
+| `Name` | `VantaUI` | ScreenGui name |
+| `Accent` | `Color3.fromRGB(145, 116, 222)` | Main violet accent |
+| `Font` | `Enum.Font.BuilderSans` | Body font |
+| `MediumFont` | `Enum.Font.BuilderSansMedium` | Labels and titles |
+| `BoldFont` | `Enum.Font.BuilderSansBold` | Emphasis |
+| `ColumnWidth` | `210` | Independent panel width |
+| `ColumnHeight` | `500` | Maximum column height; columns grow with content |
+| `ColumnGap` | `10` | Horizontal spacing |
+| `ColumnY` | `64` | Initial Y position |
+| `LocalBlur` | `true` | Panel-local Glass/DepthOfField backdrop |
+| `ToggleKey` | `RightShift` | Visibility key; `false` disables it |
+| `Visible` | `true` | Initial visibility |
+| `ReplaceExisting` | `true` | Replace a same-named ScreenGui |
+
+Methods:
 
 ```lua
-window:SetVisible(true)       -- второй аргумент true отключает анимацию
 window:Toggle()
-window:Notify({
-    Title = "Saved",
-    Content = "Configuration saved",
-    Type = "Success",        -- Info | Success | Warning | Danger
-    Duration = 4,
-})
-local value = window:GetFlag("combat.aura")
-window:SetFlag("combat.aura", false)
+window:SetVisible(boolean, instant?)
+window:SetAccent(color3)
+window:Notify({ Title = "Saved", Content = "Done", Type = "Success" })
+window:GetFlag("combat.range")
+window:SetFlag("combat.range", 6)
 window:Destroy()
 ```
 
-### Категории
+### `window:AddCategory(options)`
 
 ```lua
 local category = window:AddCategory({
-    Title = "Movement",
-    Icon = "movement", -- необязательная Lucide-иконка
-    Width = 210,      -- необязательная ширина
-    Height = 500,     -- необязательная максимальная высота
-    -- Position = UDim2.fromOffset(80, 64),
+    Title = "Combat",
+    Icon = "combat",       -- Optional Lucide alias
+    Visible = true,
 })
-
-category:SetTitle("Player Movement")
-category:SetPosition(UDim2.fromOffset(100, 80))
-category:SetVisible(false)
 ```
 
-Доступные имена иконок: `combat`, `sword`, `movement`, `speed`, `player`, `user`, `visuals`, `render`, `eye`, `settings`, `gear`, `utility`, `sliders`, `camera`, `color`, `palette`, `world`, `misc`/`grid`.
+Methods: `SetTitle`, `SetVisible`, `SetPosition`, `GetRow`. Panels are direct children of the ScreenGui, so there is no invisible shared-window hitbox.
 
-### Общие параметры компонентов
-
-Большинство компонентов принимает:
-
-- `Title` (или `Name`), `Description`, `Icon`, `Flag`;
-- `Default` и `Callback`, если применимо;
-- `Settings = function(settings) ... end` для inline-панели сразу при создании.
-
-Компоненты возвращают объект с `Get()`, `Set(value)`, `SetSilent(value)` там, где есть значение, а также `SetVisible()`, `SetTitle()`, `AddSettings()`, `OpenSettings()` и `Destroy()`.
-
-### Toggle
+### `category:AddToggle(options)`
 
 ```lua
 local toggle = category:AddToggle({
     Title = "Auto Sprint",
-    Default = true,
-    Callback = function(enabled) print(enabled) end,
+    Description = "Optional second line",
+    Icon = "movement", -- Optional Lucide icon
+    Default = false,
+    Flag = "movement.sprint",
+    RightText = "Optional hint",
+    Callback = function(value) end,
 })
-toggle:Set(false)          -- с Callback
-toggle:SetSilent(true)     -- без Callback
+
+toggle:Set(true)              -- Animated, invokes Callback
+toggle:SetSilent(true)        -- No Callback
+toggle:Get()
+toggle:OpenSettings(true)     -- Only if settings exist
+toggle:SetActive(true)        -- Row highlight without changing its value
 ```
 
-### Slider
+### Inline settings
+
+Every component has `AddSettings(function(settings) ... end)`. A toggle may instead pass `Settings = function(settings) ... end` in its options. The gear rotates and the settings body expands inside the same column.
 
 ```lua
-local slider = category:AddSlider({
-    Title = "Speed",
-    Min = 0,
-    Max = 100,
-    Step = 0.5,
-    Default = 16,
-    Suffix = "%",
-    -- Format = function(value) return string.format("%.1f", value) end,
-    Callback = function(value) print(value) end,
-})
+aura:AddSettings(function(settings)
+    settings:AddToggle({ Title = "Auto block", Default = false })
+    settings:AddDropdown({ Title = "Mode", Values = { "Single", "Multi" } })
+    settings:AddSlider({ Title = "Range", Min = 1, Max = 12, Default = 4 })
+    settings:AddKeybind({ Title = "Bind", Default = Enum.KeyCode.R })
+end)
 ```
 
-### Dropdown
+Settings support toggle, slider, dropdown, keybind, textbox, color picker and button controls.
+
+### Other controls
 
 ```lua
-local dropdown = category:AddDropdown({
-    Title = "Mode",
-    Values = { "Smooth", "Instant" },
-    Default = "Smooth",
-    Callback = function(value) print(value) end,
+category:AddSlider({
+    Title = "Walk Speed", Min = 8, Max = 32, Step = 1,
+    Default = 16, Suffix = " studs", Flag = "movement.speed",
+    Callback = function(value) end,
 })
-dropdown:Refresh({ "One", "Two", "Three" }, true)
-```
 
-### Keybind
+category:AddDropdown({
+    Title = "Camera mode",
+    Values = { "First person", "Third person", "Orbit" },
+    Default = "Third person",
+    Flag = "camera.mode",
+    Callback = function(value) end,
+})
 
-```lua
 category:AddKeybind({
-    Title = "Toggle bind",
-    Default = Enum.KeyCode.R,
-    Changed = function(newKey) print("New bind:", newKey) end,
-    Callback = function() print("Bind pressed") end,
+    Title = "Panic key",
+    Default = Enum.KeyCode.X,
+    Flag = "panic",
+    Callback = function(key) end,
 })
-```
 
-При назначении: `Escape` отменяет выбор, `Backspace` очищает bind.
-
-### Textbox
-
-```lua
 category:AddTextbox({
     Title = "Display name",
     Placeholder = "Enter a name...",
-    Default = "",
-    Callback = function(text, enterPressed)
-        print(text, enterPressed)
-    end,
+    Default = "Player",
+    Numeric = false,
+    ClearOnFocus = true,
+    Flag = "player.name",
+    Callback = function(text, enterPressed) end,
 })
-```
 
-### ColorPicker
-
-```lua
 category:AddColorPicker({
-    Title = "Highlight",
+    Title = "Accent",
     Default = Color3.fromRGB(145, 116, 222),
-    Callback = function(color) print(color) end,
+    Flag = "ui.color",
+    Callback = function(color) end,
 })
-```
 
-RGB-слайдеры цвета открываются внутри элемента.
-
-### Button, Label, Separator
-
-```lua
 category:AddButton({
-    Title = "Save config",
-    RightText = "Save",
-    Callback = function() print("Saved") end,
+    Title = "Save",
+    Description = "Optional description",
+    RightText = "Run",
+    Callback = function() end,
 })
-category:AddLabel({ Title = "Section", Description = "Description" })
+
+category:AddLabel({ Title = "Label", Description = "Optional description" })
 category:AddSeparator()
 ```
 
-## Цветовая тема
+## Lucide icons
 
-`Accent` автоматически создаёт производные оттенки. При необходимости можно переопределить отдельные цвета:
+Available aliases:
 
-```lua
-local window = VantaUI:CreateWindow({
-    Accent = Color3.fromRGB(42, 211, 137),
-    Theme = {
-        Column = Color3.fromRGB(17, 24, 24),
-        Surface = Color3.fromRGB(27, 37, 37),
-        Text = Color3.fromRGB(240, 255, 250),
-    },
-})
-```
+| Alias | Meaning |
+| --- | --- |
+| `combat` | Swords |
+| `movement` | Person standing |
+| `visuals` | Eye |
+| `player` | User round |
+| `misc` | Shapes |
+| `settings` | Settings |
+| `search` | Search |
+| `dropdown` | Chevron down |
+| `check` | Check |
+| `keybind` | Keyboard |
+| `close` | X |
+| `color` | Palette |
+| `cursor` | Mouse pointer 2 |
+| `question` | Circle question mark |
 
-Доступные ключи: `Column`, `Header`, `Surface`, `SurfaceHover`, `SurfaceActive`, `Inset`, `Track`, `Stroke`, `Text`, `SubText`, `Muted`, `White`, `Success`, `Warning`, `Danger`, `Info`, `Accent`, `AccentDark`, `AccentSoft`, `AccentText`.
+Icons use Roblox-hosted Lucide sprite sheets and sprite offsets. They are not hand-drawn approximations. Color defaults are tracked per window, so `SetAccent` recolors only the elements intended to follow the accent.
+
+## Motion and lifecycle
+
+- Drag pickup uses a subtle `1.006` scale, quiet border emphasis and background response.
+- Position uses an exact critically damped spring: 34 Hz while dragging and 26 Hz after release, integrated in `PreRender` with a capped timestep.
+- Pointer input changes only the spring target; it never snaps the panel directly.
+- Panel visibility uses opacity only, without scale-in or staggered entrances.
+- Rows do not create ripple objects, press-scale containers or toggle pulses.
+- `Destroy()` disconnects listeners and removes notifications, Glass models and DepthOfField effects.
+
+## Validation
+
+The revision is checked with the official Roblox Luau compiler/interpreter and API-derived strict mocks:
+
+- module and exact standalone source compilation;
+- five-category standalone construction;
+- six local Glass parts per panel, near-only DepthOfField settings and no `BlurEffect`;
+- backdrop projection updates and hide/show cleanup;
+- critically damped drag behavior without input snapping or overshoot;
+- inline settings height changes;
+- toggles, sliders, dropdowns, keybinds, textboxes, color pickers, buttons and flags;
+- final destruction cleanup.
+
+Mocks do **not** validate real Roblox Glass rendering, image loading or physical input. Use Studio Play mode for that final platform check.
+
+## Repository files
+
+- `VantaUI.lua` — distributable ModuleScript source.
+- `Example.client.lua` — complete standalone LocalScript with embedded library and demo.
+- `README.md` — usage and API documentation.
+- `THIRD_PARTY_NOTICES.md` — Lucide attribution/licenses and the local-blur implementation reference.
