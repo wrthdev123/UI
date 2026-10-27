@@ -1,4 +1,4 @@
-# VantaUI 3.1
+# VantaUI 3.2
 
 A self-contained Roblox Luau interface library for **five independent, draggable columns** with inline settings. The dark-violet presentation uses separated rows, thin borders, readable BuilderSans typography and genuine Lucide sprite icons — without a full-window wrapper or a vertical selected-state strip.
 
@@ -11,8 +11,11 @@ A self-contained Roblox Luau interface library for **five independent, draggable
 - Exact critically damped drag motion with distinct pickup, movement and release states; no spring overshoot.
 - Larger 230 px columns, 36 px rows, 15 px headings and a 400 px default minimum column height.
 - Separated rows with 6 px corners and panels with 8 px corners.
-- Configurable `Parallax`, bouncing `Particles`, `Image` or `None` background modes.
-- Hover descriptions appear in a large 17 px card at the bottom of the screen.
+- Configurable `Parallax`, linked bouncing `Particles`, `Image` or `None` background modes.
+- Full HSV color picker with a saturation/value pad, hue bar and hex readout.
+- Compact 46 px sliders with drag glow and direct input response.
+- Hover descriptions use 17 px bottom-screen text without a background card.
+- Columns are clamped to the viewport during drag, programmatic movement and resize.
 - Inline settings use 7 px spacing and push following rows down in the same column.
 - Roblox-hosted Lucide mappings, with BuilderSans UI fonts.
 - Toggle, slider, dropdown, keybind, textbox, color picker, button, label, separator and notification APIs.
@@ -49,11 +52,13 @@ window:SetBackground({
     Mode = "Particles",
     ParticleCount = 40,   -- 0–80
     ParticleSpeed = 42,   -- Pixels per second
+    ParticleLinkDistance = 110,
+    ParticleLinks = true,
 })
 
 window:SetBackground({
     Mode = "Parallax",
-    ParallaxStrength = 20,
+    ParallaxStrength = 32,
 })
 
 window:SetBackground({
@@ -67,8 +72,8 @@ window:SetBackgroundMode("None")
 local current = window:GetBackground()
 ```
 
-- **Parallax:** faint geometric rings follow the pointer with damped depth and slow ambient drift.
-- **Particles:** independent particles move continuously and reflect from the viewport edges.
+- **Parallax:** visible geometric rings follow `GetMouseLocation` with damped depth and slow ambient drift.
+- **Particles:** independent particles reflect from viewport edges and connect with distance-faded lines inside `ParticleLinkDistance`. Set `ParticleLinks = false` to disable links.
 - **Image:** a user-supplied Roblox image uses `Crop` scaling and subtle pointer parallax. No image asset is uploaded by the library.
 - **None:** disables the decorative layer while preserving the interface and panel-local blur.
 
@@ -101,7 +106,9 @@ local window = VantaUI:CreateWindow({
         Mode = "Parallax",
         ParticleCount = 28,
         ParticleSpeed = 42,
-        ParallaxStrength = 20,
+        ParticleLinkDistance = 110,
+        ParticleLinks = true,
+        ParallaxStrength = 32,
         -- Image = "rbxassetid://YOUR_IMAGE_ID",
     },
     ToggleKey = Enum.KeyCode.RightShift,
@@ -258,7 +265,7 @@ Settings support toggle, slider, dropdown, keybind, textbox, color picker and bu
 
 ### Hover descriptions
 
-For normal controls, `Description` no longer consumes a second line in the row. Hovering the control reveals a centered bottom card with 17 px text; leaving the row, hiding the window or destroying the control dismisses it. `AddLabel` is the exception and keeps its description inline.
+For normal controls, `Description` no longer consumes a second line in the row. Hovering reveals centered 17 px text at the bottom of the screen with no background panel or border; a subtle text outline preserves readability. Leaving the row, hiding the window or destroying the control dismisses it. `AddLabel` is the exception and keeps its description inline.
 
 ### Other controls
 
@@ -312,6 +319,8 @@ category:AddLabel({ Title = "Label", Description = "Optional description" })
 category:AddSeparator()
 ```
 
+Color pickers use a true HSV saturation/value surface and hue strip rather than RGB sliders. Notifications are compact cards with a small type-colored dot, without a vertical bar or progress line.
+
 ## Lucide icons
 
 Available aliases:
@@ -330,9 +339,11 @@ Icons use Roblox-hosted Lucide sprite sheets and sprite offsets. They are not ha
 - Drag pickup uses a subtle `1.006` scale, quiet border emphasis and background response.
 - Position uses an exact critically damped spring: 34 Hz while dragging and 26 Hz after release, integrated in `PreRender` with a capped timestep.
 - Pointer input changes only the spring target; it never snaps the panel directly.
-- Panel visibility combines opacity with a gentle 10 px critically damped rise; there is no scale-in or staggered entrance.
-- Inline panels use a 0.30-second Quint reveal with fade and an 8 px settle.
+- Panel visibility combines opacity with a restrained 4 px critically damped rise; there is no scale-in or staggered entrance.
+- Interaction transitions are short (0.12–0.22 seconds); inline panels use a 4 px settle.
+- Overlapping tweens are cancelled per property, preventing hover and release animations from fighting each other.
 - Hover descriptions and background modes crossfade instead of appearing abruptly.
+- Drag targets and rendered panel positions are clamped inside an 8 px screen margin.
 - Rows do not create ripple objects, press-scale containers or toggle pulses.
 - `Destroy()` disconnects listeners and removes notifications, Glass models and DepthOfField effects.
 
@@ -346,9 +357,12 @@ The revision is checked with the official Roblox Luau compiler/interpreter and A
 - backdrop projection updates and hide/show cleanup;
 - critically damped drag behavior without input snapping or overshoot;
 - inline settings height and spacing changes;
-- all four background modes, image configuration and particle edge bouncing;
+- all four background modes, image configuration, particle edge bouncing and distance-based links;
 - bottom hover-description show/hide behavior;
-- toggles, sliders, dropdowns, keybinds, textboxes, color pickers, buttons and flags;
+- toggles, compact slider drag/glow, dropdowns, keybinds and textboxes;
+- two-axis HSV picking, hue selection, hex synchronization and color callbacks;
+- notifications, transparent settings icons and background-free hover descriptions;
+- viewport clamping for dragged and programmatically positioned columns;
 - final destruction cleanup.
 
 Mocks do **not** validate real Roblox Glass rendering, image loading or physical input. Use Studio Play mode for that final platform check.
