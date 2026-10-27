@@ -1,26 +1,28 @@
 --[[
-    VantaUI 2.1.0
+    VantaUI 2.2.0
     Independent, draggable column panels for Roblox, written in Luau.
 
-    Interface only: no game logic, remotes, executor APIs or external assets.
+    Interface only: no game logic, remotes, executor APIs or external HTTP requests.
+    Icons use Roblox-hosted Lucide sprite sheets; see THIRD_PARTY_NOTICES.md.
     Place this file in a ModuleScript and see Example.client.lua for usage.
 ]]
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 
 local VantaUI = {}
-VantaUI.Version = "2.1.0"
+VantaUI.Version = "2.2.0"
 
 local MOTION = {
     Instant = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     Fast = TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
     Medium = TweenInfo.new(0.26, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
     Slow = TweenInfo.new(0.38, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-    Spring = TweenInfo.new(0.42, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+    Spring = TweenInfo.new(0.32, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 }
 
 local function create(className, properties, parent)
@@ -94,19 +96,19 @@ end
 local function makeTheme(options)
     local overrides = options.Theme or {}
     local accent = options.Accent or overrides.Accent or Color3.fromRGB(145, 116, 222)
-    local surface = overrides.Surface or Color3.fromRGB(25, 24, 38)
+    local surface = overrides.Surface or Color3.fromRGB(35, 32, 50)
 
     local theme = {
-        Column = Color3.fromRGB(15, 15, 25),
-        Header = Color3.fromRGB(20, 19, 32),
+        Column = Color3.fromRGB(24, 22, 37),
+        Header = Color3.fromRGB(29, 26, 43),
         Surface = surface,
-        SurfaceHover = Color3.fromRGB(34, 32, 50),
-        Inset = Color3.fromRGB(13, 13, 22),
-        Track = Color3.fromRGB(57, 54, 73),
-        Stroke = Color3.fromRGB(82, 72, 112),
+        SurfaceHover = Color3.fromRGB(45, 40, 62),
+        Inset = Color3.fromRGB(25, 23, 37),
+        Track = Color3.fromRGB(67, 61, 86),
+        Stroke = Color3.fromRGB(93, 80, 128),
         Text = Color3.fromRGB(235, 233, 246),
-        SubText = Color3.fromRGB(158, 154, 180),
-        Muted = Color3.fromRGB(108, 104, 132),
+        SubText = Color3.fromRGB(174, 168, 194),
+        Muted = Color3.fromRGB(126, 119, 150),
         White = Color3.fromRGB(255, 255, 255),
         Success = Color3.fromRGB(70, 211, 138),
         Warning = Color3.fromRGB(245, 183, 73),
@@ -133,7 +135,7 @@ local function makeText(parent, text, size, color, font)
         Text = tostring(text or ""),
         TextColor3 = color,
         TextSize = size or 13,
-        Font = font or Enum.Font.Gotham,
+        Font = font or Enum.Font.BuilderSans,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
         TextTruncate = Enum.TextTruncate.AtEnd,
@@ -141,155 +143,61 @@ local function makeText(parent, text, size, color, font)
     }, parent)
 end
 
+-- Lucide 0.363 sprite data: https://github.com/latte-soft/lucide-roblox
+-- { asset id, rect x, rect y }; every source tile is 48 x 48.
+local LUCIDE_ICONS = {
+    combat = { 16898613777, 967, 759 }, -- swords
+    sword = { 16898613777, 710, 967 },
+    movement = { 16898613613, 453, 820 }, -- move
+    speed = { 16898612819, 967, 710 }, -- chevrons-right
+    player = { 16898613869, 661, 869 }, -- user
+    user = { 16898613869, 661, 869 },
+    visuals = { 16898613353, 771, 563 }, -- eye
+    render = { 16898613353, 771, 563 },
+    eye = { 16898613353, 771, 563 },
+    settings = { 16898613777, 771, 257 },
+    gear = { 16898613777, 771, 257 },
+    utility = { 16898613777, 820, 355 }, -- sliders-horizontal
+    sliders = { 16898613777, 820, 355 },
+    camera = { 16898612819, 967, 563 },
+    color = { 16898613613, 453, 918 }, -- palette
+    palette = { 16898613613, 453, 918 },
+    world = { 16898613509, 771, 563 }, -- globe
+    misc = { 16898613509, 918, 404 }, -- layout-grid
+    grid = { 16898613509, 918, 404 },
+    ["chevron-right"] = { 16898612819, 869, 759 },
+    ["chevron-down"] = { 16898612819, 196, 918 },
+}
+
 local function makeIcon(parent, name, color, size)
-    local root = create("Frame", {
+    local key = string.lower(tostring(name or "grid"))
+    local asset = LUCIDE_ICONS[key] or LUCIDE_ICONS.grid
+    local image = "rbxassetid://" .. tostring(asset[1])
+    local rectSize = Vector2.new(48, 48)
+    local rectOffset = Vector2.new(asset[2], asset[3])
+
+    -- A direct asset URL can still be supplied by library users.
+    if string.match(key, "^rbxassetid://%d+$") then
+        image = key
+        rectSize = Vector2.new()
+        rectOffset = Vector2.new()
+    end
+
+    return create("ImageLabel", {
         Name = "Icon",
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
+        Image = image,
+        ImageColor3 = color,
+        ImageRectSize = rectSize,
+        ImageRectOffset = rectOffset,
         Size = UDim2.fromOffset(size or 16, size or 16),
         Active = false,
     }, parent)
-
-    local unit = (size or 16) / 16
-    local function line(x1, y1, x2, y2, thickness)
-        local dx = (x2 - x1) * unit
-        local dy = (y2 - y1) * unit
-        local object = create("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromOffset((x1 + x2) * 0.5 * unit, (y1 + y2) * 0.5 * unit),
-            Size = UDim2.fromOffset(math.sqrt(dx * dx + dy * dy), (thickness or 1.25) * unit),
-            Rotation = math.deg(math.atan2(dy, dx)),
-            BackgroundColor3 = color,
-            BorderSizePixel = 0,
-            Active = false,
-        }, root)
-        corner(object, 2)
-        return object
-    end
-
-    local function circle(cx, cy, radius, filled, thickness)
-        local object = create("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromOffset(cx * unit, cy * unit),
-            Size = UDim2.fromOffset(radius * 2 * unit, radius * 2 * unit),
-            BackgroundColor3 = color,
-            BackgroundTransparency = filled and 0 or 1,
-            BorderSizePixel = 0,
-            Active = false,
-        }, root)
-        corner(object, math.ceil(radius * unit))
-        if not filled then
-            stroke(object, color, 0, (thickness or 1.2) * unit)
-        end
-        return object
-    end
-
-    local function box(x, y, width, height)
-        local object = create("Frame", {
-            Position = UDim2.fromOffset(x * unit, y * unit),
-            Size = UDim2.fromOffset(width * unit, height * unit),
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Active = false,
-        }, root)
-        corner(object, 1)
-        stroke(object, color, 0, math.max(1, unit))
-        return object
-    end
-
-    local key = string.lower(tostring(name or "grid"))
-    if key == "combat" or key == "sword" then
-        line(3, 2, 13, 12)
-        line(13, 2, 3, 12)
-        line(2, 5, 5, 2)
-        line(11, 14, 14, 11)
-        line(2, 11, 5, 14)
-        line(11, 2, 14, 5)
-    elseif key == "movement" or key == "speed" then
-        line(2, 3, 7, 8)
-        line(7, 8, 2, 13)
-        line(9, 3, 14, 8)
-        line(14, 8, 9, 13)
-    elseif key == "player" or key == "user" then
-        circle(8, 4.5, 2.4, false)
-        line(3.5, 13.5, 3.5, 11)
-        line(3.5, 11, 8, 8.5)
-        line(8, 8.5, 12.5, 11)
-        line(12.5, 11, 12.5, 13.5)
-    elseif key == "visuals" or key == "render" or key == "eye" then
-        line(1.5, 8, 5, 4.5)
-        line(5, 4.5, 11, 4.5)
-        line(11, 4.5, 14.5, 8)
-        line(14.5, 8, 11, 11.5)
-        line(11, 11.5, 5, 11.5)
-        line(5, 11.5, 1.5, 8)
-        circle(8, 8, 2.1, false)
-    elseif key == "settings" or key == "gear" then
-        circle(8, 8, 3.1, false)
-        circle(8, 8, 1, true)
-        for index = 1, 8 do
-            local angle = (index - 1) * math.pi / 4
-            local cosine = math.cos(angle)
-            local sine = math.sin(angle)
-            line(8 + cosine * 4.6, 8 + sine * 4.6, 8 + cosine * 6.5, 8 + sine * 6.5, 1.4)
-        end
-    elseif key == "utility" or key == "sliders" then
-        line(2, 4, 14, 4)
-        line(2, 8, 14, 8)
-        line(2, 12, 14, 12)
-        circle(5, 4, 1.5, true)
-        circle(11, 8, 1.5, true)
-        circle(7, 12, 1.5, true)
-    elseif key == "camera" then
-        box(2, 4, 12, 9)
-        circle(8, 8.5, 2.2, false)
-    elseif key == "color" or key == "palette" then
-        circle(8, 8, 6, false)
-        circle(5.5, 6, 1, true)
-        circle(10.5, 5.5, 1, true)
-        circle(10.5, 10.5, 1, true)
-    elseif key == "world" then
-        circle(8, 8, 6, false)
-        line(2.5, 8, 13.5, 8)
-        line(8, 2, 8, 14)
-    else
-        box(2, 2, 4.5, 4.5)
-        box(9.5, 2, 4.5, 4.5)
-        box(2, 9.5, 4.5, 4.5)
-        box(9.5, 9.5, 4.5, 4.5)
-    end
-    return root
 end
 
 local function makeChevron(parent, color, size)
-    local root = create("Frame", {
-        Name = "Chevron",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.fromOffset(size or 14, size or 14),
-        Active = false,
-    }, parent)
-
-    local extent = (size or 14) / 14
-    local function line(x1, y1, x2, y2)
-        local dx = (x2 - x1) * extent
-        local dy = (y2 - y1) * extent
-        local length = math.sqrt(dx * dx + dy * dy)
-        local object = create("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromOffset((x1 + x2) * 0.5 * extent, (y1 + y2) * 0.5 * extent),
-            Size = UDim2.fromOffset(length, 1.5),
-            Rotation = math.deg(math.atan2(dy, dx)),
-            BackgroundColor3 = color,
-            BorderSizePixel = 0,
-            Active = false,
-        }, root)
-        corner(object, 2)
-    end
-
-    line(4, 3, 9, 7)
-    line(9, 7, 4, 11)
-    return root
+    return makeIcon(parent, "chevron-right", color, size or 14)
 end
 
 local function keyName(key)
@@ -354,7 +262,7 @@ local function createItem(container, options)
     local window = container.Window
     local theme = window.Theme
     local hasDescription = options.Description ~= nil and options.Description ~= ""
-    local height = options.Height or (hasDescription and 42 or 30)
+    local height = options.Height or (hasDescription and 48 or 36)
 
     local root = create("Frame", {
         Name = (options.Title or "Item") .. "Item",
@@ -386,19 +294,6 @@ local function createItem(container, options)
     local headerStroke = stroke(header, theme.Stroke, 0.84, 1)
     local headerScale = create("UIScale", { Scale = 1 }, header)
 
-    local accentBar = create("Frame", {
-        Name = "ActiveBar",
-        AnchorPoint = Vector2.new(0, 0.5),
-        Position = UDim2.new(0, 0, 0.5, 0),
-        Size = UDim2.fromOffset(2, 0),
-        BackgroundColor3 = theme.Accent,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        ZIndex = 4,
-        Active = false,
-    }, header)
-    corner(accentBar, 2)
-
     local hitbox = create("TextButton", {
         Name = "Hitbox",
         Size = UDim2.fromScale(1, 1),
@@ -410,26 +305,26 @@ local function createItem(container, options)
         ZIndex = 2,
     }, header)
 
-    local left = options.LeftPadding or (options.Icon and 30 or 10)
+    local left = options.LeftPadding or (options.Icon and 34 or 10)
     local itemIcon
     if options.Icon then
-        itemIcon = makeIcon(header, options.Icon, theme.SubText, 13)
-        itemIcon.Position = UDim2.fromOffset(9, (height - 13) * 0.5)
+        itemIcon = makeIcon(header, options.Icon, theme.SubText, 15)
+        itemIcon.Position = UDim2.fromOffset(9, (height - 15) * 0.5)
         itemIcon.ZIndex = 3
     end
 
-    local title = makeText(header, options.Title, options.TextSize or 11, theme.Text, Enum.Font.GothamMedium)
+    local title = makeText(header, options.Title, options.TextSize or 13, theme.Text, Enum.Font.BuilderSansMedium)
     title.Name = "Title"
     title.Position = UDim2.fromOffset(left, hasDescription and 4 or 0)
-    title.Size = UDim2.new(1, -(left + 10), 0, hasDescription and 16 or height)
+    title.Size = UDim2.new(1, -(left + 10), 0, hasDescription and 20 or height)
     title.ZIndex = 3
 
     local description
     if hasDescription then
-        description = makeText(header, options.Description, 9, theme.SubText, Enum.Font.Gotham)
+        description = makeText(header, options.Description, 11, theme.SubText, Enum.Font.BuilderSans)
         description.Name = "Description"
-        description.Position = UDim2.fromOffset(left, 21)
-        description.Size = UDim2.new(1, -(left + 10), 0, 14)
+        description.Position = UDim2.fromOffset(left, 26)
+        description.Size = UDim2.new(1, -(left + 10), 0, 16)
         description.ZIndex = 3
     end
 
@@ -458,7 +353,6 @@ local function createItem(container, options)
         Header = header,
         HeaderStroke = headerStroke,
         HeaderScale = headerScale,
-        AccentBar = accentBar,
         Hitbox = hitbox,
         Title = title,
         Description = description,
@@ -663,7 +557,7 @@ function Component:AddSettings(builder)
     local theme = self.Window.Theme
     local gear = create("TextButton", {
         Name = "SettingsButton",
-        Size = UDim2.fromOffset(20, 20),
+        Size = UDim2.fromOffset(22, 22),
         BackgroundColor3 = theme.Inset,
         BackgroundTransparency = 0.35,
         BorderSizePixel = 0,
@@ -671,9 +565,9 @@ function Component:AddSettings(builder)
         AutoButtonColor = false,
     })
     corner(gear, 4)
-    addRightControl(self, gear, 20, 99)
+    addRightControl(self, gear, 22, 99)
 
-    local icon = makeIcon(gear, "settings", theme.SubText, 13)
+    local icon = makeIcon(gear, "settings", theme.SubText, 14)
     icon.AnchorPoint = Vector2.new(0.5, 0.5)
     icon.Position = UDim2.fromScale(0.5, 0.5)
     icon.ZIndex = 6
@@ -718,16 +612,6 @@ end
 function Component:SetActive(state, animated)
     self._active = state and true or false
     self:RefreshBackground(animated)
-    local properties = {
-        Size = UDim2.fromOffset(2, self._active and math.min(12, self.Height - 10) or 0),
-        BackgroundTransparency = self._active and 0.12 or 1,
-    }
-    if animated == false then
-        self.AccentBar.Size = properties.Size
-        self.AccentBar.BackgroundTransparency = properties.BackgroundTransparency
-    else
-        tween(self.AccentBar, MOTION.Medium, properties)
-    end
 end
 
 function Component:Ripple()
@@ -813,40 +697,40 @@ function Container:AddToggle(options)
 
     local track = create("Frame", {
         Name = "Switch",
-        Size = UDim2.fromOffset(30, 16),
+        Size = UDim2.fromOffset(34, 18),
         BackgroundColor3 = theme.Track,
         BorderSizePixel = 0,
         Active = false,
         ZIndex = 6,
     })
-    corner(track, 8)
-    addRightControl(component, track, 30, 1)
+    corner(track, 9)
+    addRightControl(component, track, 34, 1)
 
     local knob = create("Frame", {
         Name = "Knob",
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0, 8, 0.5, 0),
-        Size = UDim2.fromOffset(10, 10),
+        Position = UDim2.new(0, 9, 0.5, 0),
+        Size = UDim2.fromOffset(12, 12),
         BackgroundColor3 = theme.SubText,
         BorderSizePixel = 0,
         ZIndex = 7,
         Active = false,
     }, track)
-    corner(knob, 5)
+    corner(knob, 6)
 
     local function pulse()
         local ring = create("Frame", {
             AnchorPoint = Vector2.new(0.5, 0.5),
             Position = knob.Position,
-            Size = UDim2.fromOffset(14, 14),
+            Size = UDim2.fromOffset(16, 16),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             ZIndex = 6,
             Active = false,
         }, track)
-        corner(ring, 7)
+        corner(ring, 8)
         local ringStroke = stroke(ring, theme.Accent, 0.25, 1.5)
-        tween(ring, MOTION.Slow, { Size = UDim2.fromOffset(30, 30) })
+        tween(ring, MOTION.Slow, { Size = UDim2.fromOffset(34, 34) })
         tween(ringStroke, MOTION.Slow, { Transparency = 1 })
         task.delay(0.40, function()
             if ring.Parent then
@@ -861,7 +745,7 @@ function Container:AddToggle(options)
         value = state
         component:SetActive(state, animated)
         local properties = {
-            Position = state and UDim2.new(1, -8, 0.5, 0) or UDim2.new(0, 8, 0.5, 0),
+            Position = state and UDim2.new(1, -9, 0.5, 0) or UDim2.new(0, 9, 0.5, 0),
             BackgroundColor3 = state and theme.White or theme.SubText,
         }
         if animated == false then
@@ -909,7 +793,7 @@ function Container:AddButton(options)
     local component = createItem(self, options)
 
     if options.RightText then
-        local rightText = makeText(component.Right, options.RightText, 10, theme.SubText, Enum.Font.GothamMedium)
+        local rightText = makeText(component.Right, options.RightText, 11, theme.SubText, Enum.Font.BuilderSansMedium)
         rightText.Size = UDim2.fromOffset(56, 20)
         rightText.TextXAlignment = Enum.TextXAlignment.Right
         addRightControl(component, rightText, 56, 1)
@@ -940,7 +824,7 @@ end
 function Container:AddSlider(options)
     options = options or {}
     options.Title = options.Title or options.Name or "Slider"
-    options.Height = options.Height or 50
+    options.Height = options.Height or 56
     options.Interactive = false
     local theme = self.Window.Theme
     local component = createItem(self, options)
@@ -956,13 +840,13 @@ function Container:AddSlider(options)
     end
     local value = clamp(options.Default or minimum, minimum, maximum)
 
-    local valueText = makeText(component.Right, "", 10, theme.SubText, Enum.Font.GothamMedium)
+    local valueText = makeText(component.Right, "", 11, theme.SubText, Enum.Font.BuilderSansMedium)
     valueText.Size = UDim2.fromOffset(46, 20)
     valueText.TextXAlignment = Enum.TextXAlignment.Right
     addRightControl(component, valueText, 46, 1)
 
-    component.Title.Position = UDim2.fromOffset(component.LeftPadding, 3)
-    component.Title.Size = UDim2.new(1, -(component.LeftPadding + component.RightWidth + 20), 0, 23)
+    component.Title.Position = UDim2.fromOffset(component.LeftPadding, 4)
+    component.Title.Size = UDim2.new(1, -(component.LeftPadding + component.RightWidth + 20), 0, 24)
     if component.Description then
         component.Description.Position = UDim2.fromOffset(component.LeftPadding, 25)
         component.Description.Visible = false
@@ -1139,7 +1023,7 @@ function Container:AddDropdown(options)
         value = values[1]
     end
 
-    local valueText = makeText(component.Right, tostring(value or "None"), 10, theme.SubText, Enum.Font.Gotham)
+    local valueText = makeText(component.Right, tostring(value or "None"), 11, theme.SubText, Enum.Font.BuilderSans)
     valueText.Size = UDim2.fromOffset(76, 20)
     valueText.TextXAlignment = Enum.TextXAlignment.Right
     addRightControl(component, valueText, 76, 1)
@@ -1185,7 +1069,7 @@ function Container:AddDropdown(options)
         for index, entryValue in ipairs(values) do
             local button = create("TextButton", {
                 Name = "Option",
-                Size = UDim2.new(1, 0, 0, 30),
+                Size = UDim2.new(1, 0, 0, 34),
                 BackgroundColor3 = theme.Surface,
                 BorderSizePixel = 0,
                 Text = "",
@@ -1194,7 +1078,7 @@ function Container:AddDropdown(options)
             }, panel.Content)
             corner(button, 6)
 
-            local label = makeText(button, tostring(entryValue), 11, theme.SubText, Enum.Font.Gotham)
+            local label = makeText(button, tostring(entryValue), 12, theme.SubText, Enum.Font.BuilderSans)
             label.Position = UDim2.fromOffset(9, 0)
             label.Size = UDim2.new(1, -32, 1, 0)
 
@@ -1291,7 +1175,7 @@ function Container:AddKeybind(options)
 
     local keyBox = create("Frame", {
         Name = "Key",
-        Size = UDim2.fromOffset(58, 24),
+        Size = UDim2.fromOffset(62, 26),
         BackgroundColor3 = theme.Inset,
         BorderSizePixel = 0,
         Active = false,
@@ -1299,9 +1183,9 @@ function Container:AddKeybind(options)
     })
     corner(keyBox, 6)
     local keyStroke = stroke(keyBox, theme.Stroke, 0.72, 1)
-    addRightControl(component, keyBox, 58, 1)
+    addRightControl(component, keyBox, 62, 1)
 
-    local label = makeText(keyBox, keyName(value), 10, theme.SubText, Enum.Font.GothamMedium)
+    local label = makeText(keyBox, keyName(value), 11, theme.SubText, Enum.Font.BuilderSansMedium)
     label.Size = UDim2.fromScale(1, 1)
     label.TextXAlignment = Enum.TextXAlignment.Center
 
@@ -1380,14 +1264,14 @@ end
 function Container:AddTextbox(options)
     options = options or {}
     options.Title = options.Title or options.Name or "Textbox"
-    options.Height = options.Height or 52
+    options.Height = options.Height or 62
     options.Interactive = false
     local theme = self.Window.Theme
     local component = createItem(self, options)
     local value = tostring(options.Default or "")
 
-    component.Title.Position = UDim2.fromOffset(component.LeftPadding, 2)
-    component.Title.Size = UDim2.new(1, -(component.LeftPadding + 12), 0, 17)
+    component.Title.Position = UDim2.fromOffset(component.LeftPadding, 4)
+    component.Title.Size = UDim2.new(1, -(component.LeftPadding + 12), 0, 20)
     if component.Description then
         component.Description.Visible = false
     end
@@ -1395,8 +1279,8 @@ function Container:AddTextbox(options)
     local box = create("Frame", {
         Name = "Input",
         AnchorPoint = Vector2.new(0, 1),
-        Position = UDim2.new(0, 10, 1, -6),
-        Size = UDim2.new(1, -20, 0, 24),
+        Position = UDim2.new(0, 10, 1, -7),
+        Size = UDim2.new(1, -20, 0, 28),
         BackgroundColor3 = theme.Inset,
         BorderSizePixel = 0,
         ZIndex = 3,
@@ -1415,8 +1299,8 @@ function Container:AddTextbox(options)
         PlaceholderText = options.Placeholder or "Type here...",
         TextColor3 = theme.Text,
         PlaceholderColor3 = theme.Muted,
-        TextSize = 11,
-        Font = Enum.Font.Gotham,
+        TextSize = 12,
+        Font = Enum.Font.BuilderSans,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextYAlignment = Enum.TextYAlignment.Center,
         ClearTextOnFocus = false,
@@ -1463,7 +1347,7 @@ function Container:AddColorPicker(options)
 
     local preview = create("Frame", {
         Name = "Preview",
-        Size = UDim2.fromOffset(24, 24),
+        Size = UDim2.fromOffset(26, 26),
         BackgroundColor3 = value,
         BorderSizePixel = 0,
         Active = false,
@@ -1471,7 +1355,7 @@ function Container:AddColorPicker(options)
     })
     corner(preview, 6)
     stroke(preview, theme.White, 0.75, 1)
-    addRightControl(component, preview, 24, 1)
+    addRightControl(component, preview, 26, 1)
 
     local icon = makeChevron(component.Right, theme.Muted, 14)
     addRightControl(component, icon, 14, 2)
@@ -1554,7 +1438,7 @@ function Container:AddLabel(options)
     options = options or {}
     options.Title = options.Title or options.Name or "Label"
     options.Interactive = false
-    options.Height = options.Height or (options.Description and 40 or 26)
+    options.Height = options.Height or (options.Description and 48 or 32)
     local component = createItem(self, options)
     component.Header.BackgroundTransparency = 0.25
     return finalize(self, component, options)
@@ -1632,13 +1516,13 @@ function Window:Notify(options)
         Active = false,
     }, toast)
 
-    local title = makeText(toast, options.Title or kind, 12, theme.Text, Enum.Font.GothamBold)
+    local title = makeText(toast, options.Title or kind, 13, theme.Text, Enum.Font.BuilderSansBold)
     title.Position = UDim2.fromOffset(14, options.Content and 9 or 0)
     title.Size = UDim2.new(1, -48, 0, options.Content and 20 or height)
 
     local content
     if options.Content then
-        content = makeText(toast, options.Content, 10, theme.SubText, Enum.Font.Gotham)
+        content = makeText(toast, options.Content, 11, theme.SubText, Enum.Font.BuilderSans)
         content.Position = UDim2.fromOffset(14, 31)
         content.Size = UDim2.new(1, -28, 0, 28)
         content.TextWrapped = true
@@ -1735,6 +1619,9 @@ function Window:LayoutCategories()
     for _, category in ipairs(self.Categories) do
         if not category._positioned then
             category.Root.Position = UDim2.fromOffset(x, self._columnY)
+            category._targetPosition = Vector2.new(x, self._columnY)
+            category._velocityX = 0
+            category._velocityY = 0
         end
         x = x + category._width + self._columnGap
     end
@@ -1751,9 +1638,9 @@ function Window:AddCategory(options)
     local frame = create("CanvasGroup", {
         Name = (options.Title or "Category") .. "Category",
         Position = options.Position or UDim2.fromOffset(16, self._columnY),
-        Size = UDim2.fromOffset(width, 45),
+        Size = UDim2.fromOffset(width, 51),
         BackgroundColor3 = theme.Column,
-        BackgroundTransparency = 0.12,
+        BackgroundTransparency = 0.18,
         BorderSizePixel = 0,
         GroupTransparency = 1,
         ClipsDescendants = true,
@@ -1762,12 +1649,12 @@ function Window:AddCategory(options)
         ZIndex = 10 + index,
     }, self.Gui)
     corner(frame, 5)
-    stroke(frame, theme.Stroke, 0.42, 1)
+    local panelStroke = stroke(frame, theme.Stroke, 0.42, 1)
     local scale = create("UIScale", { Scale = 0.97 }, frame)
 
     local header = create("Frame", {
         Name = "Header",
-        Size = UDim2.new(1, 0, 0, 32),
+        Size = UDim2.new(1, 0, 0, 38),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Active = true,
@@ -1794,7 +1681,7 @@ function Window:AddCategory(options)
     }, headerBackground)
     create("Frame", {
         Name = "Divider",
-        Position = UDim2.fromOffset(0, 31),
+        Position = UDim2.fromOffset(0, 37),
         Size = UDim2.new(1, 0, 0, 1),
         BackgroundColor3 = theme.Stroke,
         BackgroundTransparency = 0.58,
@@ -1805,13 +1692,13 @@ function Window:AddCategory(options)
 
     local titleX = 10
     if options.Icon then
-        local icon = makeIcon(header, options.Icon, theme.AccentText, 14)
-        icon.Position = UDim2.fromOffset(10, 9)
+        local icon = makeIcon(header, options.Icon, theme.AccentText, 16)
+        icon.Position = UDim2.fromOffset(10, 11)
         icon.ZIndex = 23
-        titleX = 32
+        titleX = 34
     end
 
-    local title = makeText(header, options.Title or "Category", 12, theme.Text, Enum.Font.GothamMedium)
+    local title = makeText(header, options.Title or "Category", 14, theme.Text, Enum.Font.BuilderSansMedium)
     title.Position = UDim2.fromOffset(titleX, 0)
     title.Size = UDim2.new(1, -(titleX + 12), 1, 0)
     title.TextXAlignment = options.Icon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
@@ -1819,7 +1706,7 @@ function Window:AddCategory(options)
 
     local body = create("ScrollingFrame", {
         Name = "Items",
-        Position = UDim2.fromOffset(4, 36),
+        Position = UDim2.fromOffset(4, 42),
         Size = UDim2.new(1, -8, 0, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
@@ -1836,7 +1723,7 @@ function Window:AddCategory(options)
     local bodyLayout = create("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 2),
+        Padding = UDim.new(0, 3),
     }, body)
     padding(body, 1, 2, 0, 4)
 
@@ -1846,7 +1733,12 @@ function Window:AddCategory(options)
         Root = frame,
         Header = header,
         Title = title,
+        Border = panelStroke,
         _scale = scale,
+        _targetPosition = nil,
+        _velocityX = 0,
+        _velocityY = 0,
+        _dragging = false,
         _width = width,
         _maxHeight = options.Height or self._columnHeight,
         _positioned = options.Position ~= nil,
@@ -1860,9 +1752,9 @@ function Window:AddCategory(options)
         if not frame.Parent then
             return
         end
-        local contentHeight = bodyLayout.AbsoluteContentSize.Y + 4
-        local bodyHeight = clamp(contentHeight, 0, math.max(40, category._maxHeight - 40))
-        local totalHeight = math.max(45, bodyHeight + 40)
+        local contentHeight = bodyLayout.AbsoluteContentSize.Y + 5
+        local bodyHeight = clamp(contentHeight, 0, math.max(40, category._maxHeight - 46))
+        local totalHeight = math.max(51, bodyHeight + 46)
         category._targetHeight = totalHeight
 
         local frameSize = UDim2.fromOffset(width, totalHeight)
@@ -1884,14 +1776,36 @@ function Window:AddCategory(options)
     local dragInput
     local dragStart
     local startPosition
+
+    local function setDragVisual(active)
+        category._dragging = active
+        tween(scale, MOTION.Medium, { Scale = active and 1.018 or 1 })
+        tween(frame, MOTION.Medium, { BackgroundTransparency = active and 0.10 or 0.18 })
+        tween(panelStroke, MOTION.Fast, {
+            Color = active and theme.AccentText or theme.Stroke,
+            Transparency = active and 0.24 or 0.42,
+        })
+    end
+
+    local function endDrag()
+        if not dragging then
+            return
+        end
+        dragging = false
+        dragInput = nil
+        setDragVisual(false)
+    end
+    category._cancelDrag = endDrag
+
     listen(self, header.InputBegan, function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
             dragInput = input
             dragStart = input.Position
-            startPosition = frame.Position
+            startPosition = category._targetPosition or Vector2.new(frame.Position.X.Offset, frame.Position.Y.Offset)
             self._zOrder = self._zOrder + 1
             frame.ZIndex = 20 + self._zOrder
+            setDragVisual(true)
         end
     end)
     listen(self, UserInputService.InputChanged, function(input)
@@ -1901,21 +1815,68 @@ function Window:AddCategory(options)
         if input.UserInputType == Enum.UserInputType.MouseMovement or input == dragInput then
             local delta = input.Position - dragStart
             category._positioned = true
-            frame.Position = UDim2.fromOffset(
-                startPosition.X.Offset + delta.X,
-                startPosition.Y.Offset + delta.Y
+            -- Only the spring target changes here. The rendered position is
+            -- integrated on Heartbeat, so pickup, movement and release share
+            -- one continuous motion instead of snapping to the pointer.
+            category._targetPosition = Vector2.new(
+                startPosition.X + delta.X,
+                startPosition.Y + delta.Y
             )
         end
     end)
     listen(self, UserInputService.InputEnded, function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input == dragInput) then
-            dragging = false
-            dragInput = nil
+            endDrag()
         end
+    end)
+
+    -- Damped spring with a capped timestep. Keeping the
+    -- velocity between frames avoids discontinuities when the cursor changes
+    -- direction and lets the panel settle naturally after release.
+    listen(self, RunService.Heartbeat, function(deltaTime)
+        if self._destroyed or not frame.Parent then
+            return
+        end
+        local target = category._targetPosition
+        if not target then
+            return
+        end
+
+        local currentX = frame.Position.X.Offset
+        local currentY = frame.Position.Y.Offset
+        local velocityX = category._velocityX or 0
+        local velocityY = category._velocityY or 0
+        local offsetX = target.X - currentX
+        local offsetY = target.Y - currentY
+
+        if math.abs(offsetX) < 0.02 and math.abs(offsetY) < 0.02
+            and math.abs(velocityX) < 0.05 and math.abs(velocityY) < 0.05 then
+            if currentX ~= target.X or currentY ~= target.Y then
+                frame.Position = UDim2.fromOffset(target.X, target.Y)
+            end
+            category._velocityX = 0
+            category._velocityY = 0
+            return
+        end
+
+        local step = math.min(deltaTime, 1 / 30)
+        local stiffness = 260
+        local damping = 28
+        velocityX = velocityX + (offsetX * stiffness - velocityX * damping) * step
+        velocityY = velocityY + (offsetY * stiffness - velocityY * damping) * step
+        currentX = currentX + velocityX * step
+        currentY = currentY + velocityY * step
+
+        category._velocityX = velocityX
+        category._velocityY = velocityY
+        frame.Position = UDim2.fromOffset(currentX, currentY)
     end)
 
     table.insert(self.Categories, category)
     self:LayoutCategories()
+    if not category._targetPosition then
+        category._targetPosition = Vector2.new(frame.Position.X.Offset, frame.Position.Y.Offset)
+    end
     updateHeight(false)
     task.defer(function()
         if frame.Parent then
@@ -1930,6 +1891,9 @@ end
 
 function Category:SetVisible(state, instant)
     state = state and true or false
+    if not state and self._cancelDrag then
+        self._cancelDrag()
+    end
     if self._visible == state and not instant then
         return self
     end
@@ -1968,7 +1932,7 @@ end
 
 function Category:SetPosition(position)
     self._positioned = true
-    self.Root.Position = position
+    self._targetPosition = Vector2.new(position.X.Offset, position.Y.Offset)
     return self
 end
 
@@ -2118,11 +2082,11 @@ function VantaUI:CreateWindow(options)
         _visibilityRevision = 0,
         _capturing = false,
         _destroyed = false,
-        _columnWidth = options.ColumnWidth or 196,
+        _columnWidth = options.ColumnWidth or 210,
         _columnHeight = options.ColumnHeight or 500,
         _columnGap = options.ColumnGap or 10,
         _columnY = options.ColumnY or options.Y or 64,
-        _blurSize = clamp(options.Blur or 0, 0, 24),
+        _blurSize = clamp(options.Blur or 8, 0, 24),
         _blurName = guiName .. "_Blur",
         _zOrder = 0,
     }, Window)
@@ -2194,5 +2158,48 @@ function VantaUI:CreateWindow(options)
 
     return self
 end
+
+--[[
+THIRD-PARTY NOTICES — Lucide / lucide-roblox
+Source: https://github.com/latte-soft/lucide-roblox
+
+lucide-roblox — MIT License
+Copyright (c) 2023 Latte Softworks <https://latte.to>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Lucide — ISC License
+Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part
+of Feather (MIT). All other copyright (c) for Lucide are held by Lucide
+Contributors 2022.
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+PERFORMANCE OF THIS SOFTWARE.
+]]
 
 return VantaUI
