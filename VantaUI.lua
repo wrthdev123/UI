@@ -1,6 +1,6 @@
 --[[
-    VantaUI 1.0.0
-    A self-contained, column-based Roblox interface library written in Luau.
+    VantaUI 2.0.0
+    Independent, draggable column panels for Roblox, written in Luau.
 
     Interface only: no game logic, remotes, executor APIs or external assets.
     Place this file in a ModuleScript and see Example.client.lua for usage.
@@ -10,9 +10,10 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
 
 local VantaUI = {}
-VantaUI.Version = "1.0.0"
+VantaUI.Version = "2.0.0"
 
 local MOTION = {
     Instant = TweenInfo.new(0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -93,20 +94,18 @@ end
 local function makeTheme(options)
     local overrides = options.Theme or {}
     local accent = options.Accent or overrides.Accent or Color3.fromRGB(237, 45, 72)
-    local surface = overrides.Surface or Color3.fromRGB(23, 24, 32)
+    local surface = overrides.Surface or Color3.fromRGB(31, 32, 42)
 
     local theme = {
-        Backdrop = Color3.fromRGB(5, 6, 9),
-        Window = Color3.fromRGB(12, 13, 18),
-        Column = Color3.fromRGB(15, 16, 22),
+        Column = Color3.fromRGB(20, 21, 28),
         Surface = surface,
-        SurfaceHover = Color3.fromRGB(31, 32, 42),
-        Inset = Color3.fromRGB(11, 12, 17),
-        Track = Color3.fromRGB(49, 51, 63),
-        Stroke = Color3.fromRGB(70, 72, 86),
-        Text = Color3.fromRGB(245, 245, 249),
-        SubText = Color3.fromRGB(155, 158, 173),
-        Muted = Color3.fromRGB(103, 107, 123),
+        SurfaceHover = Color3.fromRGB(42, 44, 56),
+        Inset = Color3.fromRGB(18, 19, 26),
+        Track = Color3.fromRGB(66, 69, 84),
+        Stroke = Color3.fromRGB(94, 98, 116),
+        Text = Color3.fromRGB(250, 250, 253),
+        SubText = Color3.fromRGB(181, 185, 201),
+        Muted = Color3.fromRGB(128, 133, 151),
         White = Color3.fromRGB(255, 255, 255),
         Success = Color3.fromRGB(70, 211, 138),
         Warning = Color3.fromRGB(245, 183, 73),
@@ -116,8 +115,8 @@ local function makeTheme(options)
     }
 
     theme.AccentDark = blend(accent, Color3.new(0, 0, 0), 0.46)
-    theme.AccentSoft = blend(surface, accent, 0.18)
-    theme.SurfaceActive = blend(surface, accent, 0.27)
+    theme.AccentSoft = blend(surface, accent, 0.26)
+    theme.SurfaceActive = blend(surface, accent, 0.42)
 
     for key, value in pairs(overrides) do
         theme[key] = value
@@ -1578,40 +1577,86 @@ function Window:Notify(options)
     }
 end
 
+function Window:LayoutCategories()
+    if #self.Categories == 0 then
+        return
+    end
+
+    local viewport = Vector2.new(1280, 720)
+    local camera = Workspace.CurrentCamera
+    if camera and camera.ViewportSize.X > 0 then
+        viewport = camera.ViewportSize
+    end
+
+    local totalWidth = 0
+    for index, category in ipairs(self.Categories) do
+        totalWidth = totalWidth + category._width
+        if index > 1 then
+            totalWidth = totalWidth + self._columnGap
+        end
+    end
+
+    local x = math.max(16, (viewport.X - totalWidth) * 0.5)
+    for _, category in ipairs(self.Categories) do
+        if not category._positioned then
+            category.Root.Position = UDim2.fromOffset(x, self._columnY)
+        end
+        x = x + category._width + self._columnGap
+    end
+end
+
 function Window:AddCategory(options)
     options = options or {}
     local theme = self.Theme
     local width = options.Width or self._columnWidth
+    local index = #self.Categories + 1
 
-    local frame = create("Frame", {
+    -- Each category is a top-level panel. There is deliberately no shared
+    -- window, full-screen backdrop or gradient applied to this CanvasGroup.
+    local frame = create("CanvasGroup", {
         Name = (options.Title or "Category") .. "Category",
-        Size = UDim2.new(0, width, 1, 0),
+        Position = options.Position or UDim2.fromOffset(16, self._columnY),
+        Size = UDim2.fromOffset(width, 55),
         BackgroundColor3 = theme.Column,
-        BackgroundTransparency = 0.04,
+        BackgroundTransparency = 0.025,
         BorderSizePixel = 0,
-        LayoutOrder = #self.Categories + 1,
+        GroupTransparency = 1,
         ClipsDescendants = true,
-        Active = false,
-    }, self._columnHolder)
-    corner(frame, 10)
-    stroke(frame, theme.Stroke, 0.76, 1)
+        Visible = false,
+        Active = true,
+        ZIndex = 10 + index,
+    }, self.Gui)
+    corner(frame, 9)
+    stroke(frame, theme.Stroke, 0.48, 1)
+    local scale = create("UIScale", { Scale = 0.97 }, frame)
 
     local header = create("Frame", {
         Name = "Header",
         Size = UDim2.new(1, 0, 0, 40),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Active = true,
+        ZIndex = 20,
+    }, frame)
+
+    -- The gradient has its own background object, so it can never tint the
+    -- title or any other descendant of the category CanvasGroup.
+    local headerBackground = create("Frame", {
+        Name = "Background",
+        Size = UDim2.fromScale(1, 1),
         BackgroundColor3 = theme.Accent,
         BorderSizePixel = 0,
-        ZIndex = 2,
         Active = false,
-    }, frame)
-    corner(header, 10)
+        ZIndex = 20,
+    }, header)
+    corner(headerBackground, 9)
     create("UIGradient", {
         Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, theme.Accent),
+            ColorSequenceKeypoint.new(0, blend(theme.Accent, theme.White, 0.08)),
             ColorSequenceKeypoint.new(1, theme.AccentDark),
         }),
-        Rotation = 25,
-    }, header)
+        Rotation = 20,
+    }, headerBackground)
 
     local titleX = 12
     if options.Icon then
@@ -1619,16 +1664,16 @@ function Window:AddCategory(options)
             Position = UDim2.fromOffset(10, 9),
             Size = UDim2.fromOffset(22, 22),
             BackgroundColor3 = theme.White,
-            BackgroundTransparency = 0.84,
+            BackgroundTransparency = 0.82,
             BorderSizePixel = 0,
-            ZIndex = 3,
+            ZIndex = 22,
             Active = false,
         }, header)
         corner(badge, 6)
         local icon = makeText(badge, options.Icon, 11, theme.White, Enum.Font.GothamBold)
         icon.Size = UDim2.fromScale(1, 1)
         icon.TextXAlignment = Enum.TextXAlignment.Center
-        icon.ZIndex = 4
+        icon.ZIndex = 23
         titleX = 40
     end
 
@@ -1636,24 +1681,25 @@ function Window:AddCategory(options)
     title.Position = UDim2.fromOffset(titleX, 0)
     title.Size = UDim2.new(1, -(titleX + 12), 1, 0)
     title.TextXAlignment = options.Icon and Enum.TextXAlignment.Left or Enum.TextXAlignment.Center
-    title.ZIndex = 3
+    title.ZIndex = 23
 
     local body = create("ScrollingFrame", {
         Name = "Items",
-        Position = UDim2.fromOffset(5, 45),
-        Size = UDim2.new(1, -10, 1, -51),
+        Position = UDim2.fromOffset(5, 44),
+        Size = UDim2.new(1, -10, 0, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         CanvasSize = UDim2.new(),
         AutomaticCanvasSize = Enum.AutomaticSize.Y,
         ScrollBarThickness = 2,
         ScrollBarImageColor3 = theme.Accent,
-        ScrollBarImageTransparency = 0.35,
+        ScrollBarImageTransparency = 0.20,
         ScrollingDirection = Enum.ScrollingDirection.Y,
         ClipsDescendants = true,
         Active = true,
+        ZIndex = 15,
     }, frame)
-    create("UIListLayout", {
+    local bodyLayout = create("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
         SortOrder = Enum.SortOrder.LayoutOrder,
         Padding = UDim.new(0, 5),
@@ -1666,15 +1712,129 @@ function Window:AddCategory(options)
         Root = frame,
         Header = header,
         Title = title,
+        _scale = scale,
+        _width = width,
+        _maxHeight = options.Height or self._columnHeight,
+        _positioned = options.Position ~= nil,
+        _visible = false,
+        _visibilityRevision = 0,
         _order = 0,
         _items = {},
     }, Category)
+
+    local function updateHeight(animated)
+        if not frame.Parent then
+            return
+        end
+        local contentHeight = bodyLayout.AbsoluteContentSize.Y + 5
+        local bodyHeight = clamp(contentHeight, 0, math.max(40, category._maxHeight - 50))
+        local totalHeight = math.max(55, bodyHeight + 50)
+        category._targetHeight = totalHeight
+
+        local frameSize = UDim2.fromOffset(width, totalHeight)
+        local bodySize = UDim2.new(1, -10, 0, bodyHeight)
+        if animated ~= false and category._visible then
+            tween(frame, MOTION.Medium, { Size = frameSize })
+            tween(body, MOTION.Medium, { Size = bodySize })
+        else
+            frame.Size = frameSize
+            body.Size = bodySize
+        end
+    end
+    category._updateHeight = updateHeight
+    listen(self, bodyLayout:GetPropertyChangedSignal("AbsoluteContentSize"), function()
+        updateHeight(true)
+    end)
+
+    local dragging = false
+    local dragInput
+    local dragStart
+    local startPosition
+    listen(self, header.InputBegan, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragInput = input
+            dragStart = input.Position
+            startPosition = frame.Position
+            self._zOrder = self._zOrder + 1
+            frame.ZIndex = 20 + self._zOrder
+        end
+    end)
+    listen(self, UserInputService.InputChanged, function(input)
+        if not dragging then
+            return
+        end
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input == dragInput then
+            local delta = input.Position - dragStart
+            category._positioned = true
+            frame.Position = UDim2.fromOffset(
+                startPosition.X.Offset + delta.X,
+                startPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+    listen(self, UserInputService.InputEnded, function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input == dragInput) then
+            dragging = false
+            dragInput = nil
+        end
+    end)
+
     table.insert(self.Categories, category)
+    self:LayoutCategories()
+    updateHeight(false)
+    task.defer(function()
+        if frame.Parent then
+            updateHeight(false)
+            if self._visible and not self._destroyed then
+                category:SetVisible(true)
+            end
+        end
+    end)
     return category
 end
 
-function Category:SetVisible(state)
-    self.Root.Visible = state and true or false
+function Category:SetVisible(state, instant)
+    state = state and true or false
+    if self._visible == state and not instant then
+        return self
+    end
+    self._visible = state
+    self._visibilityRevision = self._visibilityRevision + 1
+    local revision = self._visibilityRevision
+
+    if state then
+        self.Root.Visible = true
+        self._updateHeight(false)
+        if instant then
+            self.Root.GroupTransparency = 0
+            self._scale.Scale = 1
+        else
+            self.Root.GroupTransparency = 1
+            self._scale.Scale = 0.97
+            tween(self.Root, MOTION.Medium, { GroupTransparency = 0 })
+            tween(self._scale, MOTION.Slow, { Scale = 1 })
+        end
+    else
+        if instant then
+            self.Root.Visible = false
+            self.Root.GroupTransparency = 1
+        else
+            tween(self.Root, MOTION.Fast, { GroupTransparency = 1 })
+            tween(self._scale, MOTION.Fast, { Scale = 0.98 })
+            task.delay(0.18, function()
+                if self._visibilityRevision == revision and not self._visible then
+                    self.Root.Visible = false
+                end
+            end)
+        end
+    end
+    return self
+end
+
+function Category:SetPosition(position)
+    self._positioned = true
+    self.Root.Position = position
     return self
 end
 
@@ -1710,60 +1870,42 @@ function Window:SetVisible(state, instant)
     self._visibilityRevision = self._visibilityRevision + 1
     local revision = self._visibilityRevision
 
-    if state then
-        self.Backdrop.Visible = true
-        self.Root.Visible = true
-        if instant then
-            self.Backdrop.BackgroundTransparency = self._backdropTransparency
-            self.Root.GroupTransparency = 0
-            self._scale.Scale = 1
+    for index, category in ipairs(self.Categories) do
+        local delay = instant and 0 or (index - 1) * (state and 0.025 or 0.015)
+        if delay > 0 then
+            task.delay(delay, function()
+                if self._visibilityRevision == revision and not self._destroyed then
+                    category:SetVisible(state)
+                end
+            end)
         else
-            self.Backdrop.BackgroundTransparency = 1
-            self.Root.GroupTransparency = 1
-            self._scale.Scale = 0.965
-            tween(self.Backdrop, MOTION.Medium, { BackgroundTransparency = self._backdropTransparency })
-            tween(self.Root, MOTION.Slow, { GroupTransparency = 0 })
-            tween(self._scale, MOTION.Slow, { Scale = 1 })
+            category:SetVisible(state, instant)
         end
+    end
 
-        if self._blurSize > 0 then
-            if not self._blur or not self._blur.Parent then
-                self._blur = create("BlurEffect", {
-                    Name = "VantaUI_Blur_" .. tostring(self._id),
-                    Size = 0,
-                    Enabled = true,
-                }, Lighting)
-            end
-            if instant then
-                self._blur.Size = self._blurSize
-            else
-                tween(self._blur, MOTION.Medium, { Size = self._blurSize })
-            end
+    if state and self._blurSize > 0 then
+        if not self._blur or not self._blur.Parent then
+            self._blur = create("BlurEffect", {
+                Name = self._blurName,
+                Size = 0,
+                Enabled = true,
+            }, Lighting)
         end
-    else
         if instant then
-            self.Backdrop.Visible = false
-            self.Root.Visible = false
-            self.Root.GroupTransparency = 1
-            if self._blur then
-                self._blur:Destroy()
-                self._blur = nil
-            end
+            self._blur.Size = self._blurSize
         else
-            tween(self.Backdrop, MOTION.Fast, { BackgroundTransparency = 1 })
-            tween(self.Root, MOTION.Medium, { GroupTransparency = 1 })
-            tween(self._scale, MOTION.Medium, { Scale = 0.975 })
-            if self._blur then
-                tween(self._blur, MOTION.Fast, { Size = 0 })
-            end
-            task.delay(0.27, function()
-                if self._visibilityRevision == revision and not self._visible and not self._destroyed then
-                    self.Backdrop.Visible = false
-                    self.Root.Visible = false
-                    if self._blur then
-                        self._blur:Destroy()
-                        self._blur = nil
-                    end
+            tween(self._blur, MOTION.Medium, { Size = self._blurSize })
+        end
+    elseif not state and self._blur then
+        if instant then
+            self._blur:Destroy()
+            self._blur = nil
+        else
+            tween(self._blur, MOTION.Fast, { Size = 0 })
+            task.delay(0.18, function()
+                if self._visibilityRevision == revision and not self._visible and self._blur then
+                    self._blur:Destroy()
+                    self._blur = nil
                 end
             end)
         end
@@ -1775,21 +1917,25 @@ function Window:Toggle()
     return self:SetVisible(not self._visible)
 end
 
-function Window:Destroy()
-    if self._destroyed then
-        return
-    end
-    self._destroyed = true
-    for _, connection in ipairs(self._connections) do
+local function cleanupWindow(window)
+    window._destroyed = true
+    for _, connection in ipairs(window._connections) do
         if connection.Connected then
             connection:Disconnect()
         end
     end
-    self._connections = {}
-    if self._blur then
-        self._blur:Destroy()
-        self._blur = nil
+    window._connections = {}
+    if window._blur then
+        window._blur:Destroy()
+        window._blur = nil
     end
+end
+
+function Window:Destroy()
+    if self._destroyed then
+        return
+    end
+    cleanupWindow(self)
     if self.Gui then
         self.Gui:Destroy()
     end
@@ -1808,9 +1954,17 @@ function VantaUI:CreateWindow(options)
     end
     assert(parent, "[VantaUI] A PlayerGui or custom Parent is required")
 
+    local guiName = options.Name or "VantaUI"
+    if options.ReplaceExisting ~= false then
+        local existing = parent:FindFirstChild(guiName)
+        if existing and existing:IsA("ScreenGui") then
+            existing:Destroy()
+        end
+    end
+
     local theme = makeTheme(options)
     local gui = create("ScreenGui", {
-        Name = options.Name or "VantaUI",
+        Name = guiName,
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         DisplayOrder = options.DisplayOrder or 100,
@@ -1830,162 +1984,23 @@ function VantaUI:CreateWindow(options)
         _visibilityRevision = 0,
         _capturing = false,
         _destroyed = false,
-        _columnWidth = options.ColumnWidth or 214,
+        _columnWidth = options.ColumnWidth or 196,
+        _columnHeight = options.ColumnHeight or 500,
+        _columnGap = options.ColumnGap or 10,
+        _columnY = options.ColumnY or options.Y or 64,
         _blurSize = clamp(options.Blur or 0, 0, 24),
-        _backdropTransparency = options.BackdropTransparency == nil and 0.42 or options.BackdropTransparency,
+        _blurName = guiName .. "_Blur",
+        _zOrder = 0,
     }, Window)
 
-    local backdrop = create("Frame", {
-        Name = "Backdrop",
-        Size = UDim2.fromScale(1, 1),
-        BackgroundColor3 = theme.Backdrop,
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Visible = false,
-        Active = false,
-    }, gui)
-    self.Backdrop = backdrop
+    listen(self, gui.Destroying, function()
+        if not self._destroyed then
+            cleanupWindow(self)
+        end
+    end)
 
-    local root = create("CanvasGroup", {
-        Name = "Window",
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.fromScale(0.5, 0.5),
-        Size = UDim2.new(1, -36, 1, -36),
-        BackgroundColor3 = theme.Window,
-        BackgroundTransparency = 0.04,
-        BorderSizePixel = 0,
-        GroupTransparency = 1,
-        ClipsDescendants = true,
-        Visible = false,
-        Active = true,
-    }, gui)
-    corner(root, 13)
-    stroke(root, theme.Stroke, 0.58, 1)
-    create("UIGradient", {
-        Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, blend(theme.Window, theme.Accent, 0.055)),
-            ColorSequenceKeypoint.new(0.55, theme.Window),
-            ColorSequenceKeypoint.new(1, blend(theme.Window, Color3.new(0, 0, 0), 0.18)),
-        }),
-        Rotation = 125,
-    }, root)
-    local maxSize = options.Size or Vector2.new(1140, 600)
-    create("UISizeConstraint", {
-        MaxSize = maxSize,
-    }, root)
-    local scale = create("UIScale", { Scale = 0.965 }, root)
-    self.Root = root
-    self._scale = scale
-
-    local topbar = create("Frame", {
-        Name = "Topbar",
-        Size = UDim2.new(1, 0, 0, 56),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Active = true,
-        ZIndex = 2,
-    }, root)
-
-    local divider = create("Frame", {
-        Position = UDim2.fromOffset(0, 55),
-        Size = UDim2.new(1, 0, 0, 1),
-        BackgroundColor3 = theme.Stroke,
-        BackgroundTransparency = 0.72,
-        BorderSizePixel = 0,
-        Active = false,
-    }, topbar)
-
-    local logo = create("Frame", {
-        Position = UDim2.fromOffset(14, 13),
-        Size = UDim2.fromOffset(30, 30),
-        BackgroundColor3 = theme.Accent,
-        BorderSizePixel = 0,
-        ZIndex = 3,
-        Active = false,
-    }, topbar)
-    corner(logo, 8)
-    create("UIGradient", {
-        Color = ColorSequence.new(theme.Accent, theme.AccentDark),
-        Rotation = 45,
-    }, logo)
-    local logoText = makeText(logo, options.Logo or "V", 15, theme.White, Enum.Font.GothamBold)
-    logoText.Size = UDim2.fromScale(1, 1)
-    logoText.TextXAlignment = Enum.TextXAlignment.Center
-    logoText.ZIndex = 4
-
-    local title = makeText(topbar, options.Title or "Vanta UI", 14, theme.Text, Enum.Font.GothamBold)
-    title.Position = UDim2.fromOffset(54, 8)
-    title.Size = UDim2.fromOffset(260, 22)
-    title.ZIndex = 3
-
-    local subtitle = makeText(topbar, options.Subtitle or "Column interface", 10, theme.Muted, Enum.Font.Gotham)
-    subtitle.Position = UDim2.fromOffset(54, 29)
-    subtitle.Size = UDim2.fromOffset(260, 17)
-    subtitle.ZIndex = 3
-
-    local close = create("TextButton", {
-        Name = "Close",
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -14, 0.5, 0),
-        Size = UDim2.fromOffset(28, 28),
-        BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.15,
-        BorderSizePixel = 0,
-        Text = "×",
-        TextColor3 = theme.SubText,
-        TextSize = 20,
-        Font = Enum.Font.GothamMedium,
-        AutoButtonColor = false,
-        ZIndex = 4,
-    }, topbar)
-    corner(close, 7)
-
-    local search = create("TextBox", {
-        Name = "Search",
-        AnchorPoint = Vector2.new(1, 0.5),
-        Position = UDim2.new(1, -52, 0.5, 0),
-        Size = UDim2.fromOffset(190, 30),
-        BackgroundColor3 = theme.Inset,
-        BackgroundTransparency = 0.05,
-        BorderSizePixel = 0,
-        Text = "",
-        PlaceholderText = options.SearchPlaceholder or "Search modules...",
-        PlaceholderColor3 = theme.Muted,
-        TextColor3 = theme.Text,
-        TextSize = 11,
-        Font = Enum.Font.Gotham,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        ClearTextOnFocus = false,
-        ZIndex = 4,
-        Visible = options.Search ~= false,
-    }, topbar)
-    corner(search, 7)
-    local searchStroke = stroke(search, theme.Stroke, 0.80, 1)
-    padding(search, 10, 10, 0, 0)
-
-    local columns = create("ScrollingFrame", {
-        Name = "Columns",
-        Position = UDim2.fromOffset(10, 66),
-        Size = UDim2.new(1, -20, 1, -76),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        CanvasSize = UDim2.new(),
-        AutomaticCanvasSize = Enum.AutomaticSize.X,
-        ScrollBarThickness = 3,
-        ScrollBarImageColor3 = theme.Accent,
-        ScrollBarImageTransparency = 0.35,
-        ScrollingDirection = Enum.ScrollingDirection.X,
-        ClipsDescendants = true,
-        Active = true,
-    }, root)
-    create("UIListLayout", {
-        FillDirection = Enum.FillDirection.Horizontal,
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 9),
-    }, columns)
-    padding(columns, 0, 6, 0, 5)
-    self._columnHolder = columns
-
+    -- The only full-size visual container is the ScreenGui itself. Category
+    -- panels are direct children, so there is no invisible window hitbox.
     local notifications = create("Frame", {
         Name = "Notifications",
         AnchorPoint = Vector2.new(1, 1),
@@ -1994,6 +2009,7 @@ function VantaUI:CreateWindow(options)
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         Active = false,
+        ZIndex = 1000,
     }, gui)
     create("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
@@ -2004,75 +2020,19 @@ function VantaUI:CreateWindow(options)
     }, notifications)
     self._notificationHolder = notifications
 
-    listen(self, close.Activated, function()
-        self:SetVisible(false)
-    end)
-    listen(self, close.MouseEnter, function()
-        tween(close, MOTION.Fast, {
-            BackgroundColor3 = theme.Danger,
-            TextColor3 = theme.White,
-            BackgroundTransparency = 0,
-        })
-    end)
-    listen(self, close.MouseLeave, function()
-        tween(close, MOTION.Fast, {
-            BackgroundColor3 = theme.Surface,
-            TextColor3 = theme.SubText,
-            BackgroundTransparency = 0.15,
-        })
-    end)
-
-    listen(self, search.Focused, function()
-        tween(searchStroke, MOTION.Fast, { Color = theme.Accent, Transparency = 0.35 })
-    end)
-    listen(self, search.FocusLost, function()
-        tween(searchStroke, MOTION.Fast, { Color = theme.Stroke, Transparency = 0.80 })
-    end)
-    listen(self, search:GetPropertyChangedSignal("Text"), function()
-        local query = string.lower(search.Text)
-        for _, category in ipairs(self.Categories) do
-            for _, item in ipairs(category._items) do
-                local visible = query == "" or string.find(item.SearchText or "", query, 1, true) ~= nil
-                item:SetVisible(visible)
-            end
+    local function bindCamera()
+        local camera = Workspace.CurrentCamera
+        if camera then
+            listen(self, camera:GetPropertyChangedSignal("ViewportSize"), function()
+                self:LayoutCategories()
+            end)
         end
-    end)
-
-    local function updateResponsive()
-        local width = root.AbsoluteSize.X
-        search.Visible = options.Search ~= false and width >= 620
-        subtitle.Visible = width >= 390
-        title.Size = UDim2.fromOffset(search.Visible and 260 or math.max(120, width - 110), 22)
     end
-    listen(self, root:GetPropertyChangedSignal("AbsoluteSize"), updateResponsive)
-    task.defer(updateResponsive)
-
-    local dragging = false
-    local dragStart
-    local startPosition
-    listen(self, topbar.InputBegan, function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPosition = root.Position
-        end
+    listen(self, Workspace:GetPropertyChangedSignal("CurrentCamera"), function()
+        bindCamera()
+        self:LayoutCategories()
     end)
-    listen(self, UserInputService.InputChanged, function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            root.Position = UDim2.new(
-                startPosition.X.Scale,
-                startPosition.X.Offset + delta.X,
-                startPosition.Y.Scale,
-                startPosition.Y.Offset + delta.Y
-            )
-        end
-    end)
-    listen(self, UserInputService.InputEnded, function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-            dragging = false
-        end
-    end)
+    bindCamera()
 
     local toggleKey = Enum.KeyCode.RightShift
     if options.ToggleKey ~= nil then
@@ -2089,13 +2049,14 @@ function VantaUI:CreateWindow(options)
         end)
     end
 
-    if options.Visible ~= false then
-        task.defer(function()
-            if not self._destroyed then
+    task.defer(function()
+        if not self._destroyed then
+            self:LayoutCategories()
+            if options.Visible ~= false then
                 self:SetVisible(true)
             end
-        end)
-    end
+        end
+    end)
 
     return self
 end

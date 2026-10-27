@@ -1,6 +1,6 @@
 # VantaUI
 
-Колоночная UI-библиотека для Roblox на **Luau**, собранная по мотивам присланных референсов. Все настройки раскрываются **прямо внутри своей колонки** и плавно сдвигают остальные элементы — без отдельных окон и внешних изображений.
+UI-библиотека для Roblox на **Luau**, собранная по мотивам присланных референсов. Каждая категория — **отдельная независимая панель**, а не колонка внутри общего окна. Панели можно перетаскивать за заголовки. Настройки раскрываются прямо внутри своей панели и плавно сдвигают остальные элементы.
 
 ## Файлы
 
@@ -30,11 +30,13 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VantaUI = require(ReplicatedStorage:WaitForChild("VantaUI"))
 
 local window = VantaUI:CreateWindow({
-    Title = "VANTA",
-    Subtitle = "Right Shift  •  inline settings",
+    Name = "VantaUI",
     Accent = Color3.fromRGB(237, 45, 72),
+    ColumnWidth = 196,
+    ColumnHeight = 500,
+    ColumnY = 64,
     ToggleKey = Enum.KeyCode.RightShift,
-    Blur = 8,
+    Blur = 0,
 })
 
 local combat = window:AddCategory({
@@ -72,13 +74,13 @@ end)
 
 ## Что реализовано
 
-- Независимые колонки с вертикальной прокруткой и горизонтальной прокруткой всего набора на узких экранах.
-- Плавное открытие и закрытие окна, затемнение фона и необязательный blur.
-- Перетаскивание окна мышью или касанием.
+- Пять независимых панелей без общего окна, backdrop или затемняющего градиента.
+- Перетаскивание каждой панели за её заголовок мышью или касанием.
+- Автоматическая высота панели и вертикальная прокрутка после достижения `ColumnHeight`.
+- Stagger-анимация показа и скрытия всех панелей через `Right Shift`.
 - Hover, press, ripple, toggle pulse, spring-движение переключателей и slider-ручек.
 - Inline settings с одновременной анимацией высоты, прозрачности и положения содержимого.
-- Dropdown также раскрывается внутри колонки.
-- Поиск по элементам всех категорий.
+- Dropdown также раскрывается внутри своей панели.
 - Уведомления с enter/exit-анимацией и индикатором времени.
 - Flags для чтения и изменения значений из другого кода.
 - Очистка соединений, GUI и blur через `window:Destroy()`.
@@ -89,17 +91,17 @@ end)
 
 | Параметр | Тип / значение по умолчанию | Назначение |
 |---|---|---|
-| `Title` | `"Vanta UI"` | Заголовок окна |
-| `Subtitle` | `"Column interface"` | Подзаголовок |
-| `Logo` | `"V"` | Короткий текст логотипа |
+| `Name` | `"VantaUI"` | Имя ScreenGui |
 | `Accent` | `Color3.fromRGB(237, 45, 72)` | Акцентный цвет |
 | `Theme` | `nil` | Таблица переопределений цветов |
-| `Size` | `Vector2.new(1140, 600)` | Максимальный размер окна |
-| `ColumnWidth` | `214` | Ширина новых колонок |
+| `ColumnWidth` | `196` | Ширина новых панелей |
+| `ColumnHeight` | `500` | Максимальная высота панели |
+| `ColumnGap` | `10` | Расстояние между панелями |
+| `ColumnY` | `64` | Вертикальная позиция автоматического ряда |
 | `ToggleKey` | `RightShift` | Клавиша видимости; `false` отключает |
-| `Blur` | `0` | Сила blur от `0` до `24` |
-| `Search` | `true` | Строка поиска |
-| `Visible` | `true` | Показать окно после создания |
+| `Blur` | `0` | Необязательный blur мира от `0` до `24` |
+| `Visible` | `true` | Показать панели после создания |
+| `ReplaceExisting` | `true` | Удалить предыдущий ScreenGui с тем же именем |
 | `Parent` | `PlayerGui` | Другой контейнер для ScreenGui |
 
 Методы окна:
@@ -124,10 +126,13 @@ window:Destroy()
 local category = window:AddCategory({
     Title = "Movement",
     Icon = "M",       -- необязательный короткий glyph
-    Width = 214,      -- необязательное переопределение
+    Width = 196,      -- необязательная ширина
+    Height = 500,     -- необязательная максимальная высота
+    -- Position = UDim2.fromOffset(80, 64),
 })
 
 category:SetTitle("Player Movement")
+category:SetPosition(UDim2.fromOffset(100, 80))
 category:SetVisible(false)
 ```
 
@@ -238,12 +243,11 @@ category:AddSeparator()
 local window = VantaUI:CreateWindow({
     Accent = Color3.fromRGB(42, 211, 137),
     Theme = {
-        Window = Color3.fromRGB(10, 15, 15),
-        Column = Color3.fromRGB(13, 20, 20),
-        Surface = Color3.fromRGB(20, 29, 29),
+        Column = Color3.fromRGB(17, 24, 24),
+        Surface = Color3.fromRGB(27, 37, 37),
         Text = Color3.fromRGB(240, 255, 250),
     },
 })
 ```
 
-Доступные ключи: `Backdrop`, `Window`, `Column`, `Surface`, `SurfaceHover`, `SurfaceActive`, `Inset`, `Track`, `Stroke`, `Text`, `SubText`, `Muted`, `White`, `Success`, `Warning`, `Danger`, `Info`, `Accent`, `AccentDark`, `AccentSoft`.
+Доступные ключи: `Column`, `Surface`, `SurfaceHover`, `SurfaceActive`, `Inset`, `Track`, `Stroke`, `Text`, `SubText`, `Muted`, `White`, `Success`, `Warning`, `Danger`, `Info`, `Accent`, `AccentDark`, `AccentSoft`.
