@@ -1,5 +1,5 @@
 -- VantaUI 3.0 standalone example
--- Flat independent panels, local glass backdrops and critically damped drag.
+-- Separated rows, rounded independent panels and local glass backdrops.
 -- Paste this ENTIRE file into a LocalScript in StarterPlayerScripts.
 -- No ModuleScript, ReplicatedStorage setup or additional files are required.
 -- In Roblox Studio use Play / Play Solo, not the server-only Run mode.
@@ -9,7 +9,7 @@ print("[VantaUI] Example is starting...")
 
 local VantaUI = (function()
 --[[
-    VantaUI 3.0.0
+    VantaUI 3.0.1
     Independent, draggable column panels for Roblox, written in Luau.
 
     Interface only: no game logic, remotes, executor APIs or external HTTP requests.
@@ -25,7 +25,7 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 
 local VantaUI = {}
-VantaUI.Version = "3.0.0"
+VantaUI.Version = "3.0.1"
 
 local MOTION = {
     Instant = TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
@@ -107,13 +107,13 @@ end
 local function makeTheme(options)
     local overrides = options.Theme or {}
     local accent = options.Accent or overrides.Accent or Color3.fromRGB(145, 116, 222)
-    local surface = overrides.Surface or Color3.fromRGB(30, 27, 45)
+    local surface = overrides.Surface or Color3.fromRGB(35, 31, 50)
 
     local theme = {
         Column = Color3.fromRGB(22, 20, 35),
         Header = Color3.fromRGB(25, 22, 39),
         Surface = surface,
-        SurfaceHover = Color3.fromRGB(43, 37, 61),
+        SurfaceHover = Color3.fromRGB(47, 40, 66),
         Inset = Color3.fromRGB(20, 18, 31),
         Track = Color3.fromRGB(67, 61, 86),
         Stroke = Color3.fromRGB(86, 73, 119),
@@ -295,14 +295,14 @@ local function createItem(container, options)
         Name = "Header",
         Size = UDim2.new(1, 0, 0, height),
         BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 1,
+        BackgroundTransparency = 0.26,
         BorderSizePixel = 0,
         ClipsDescendants = true,
         LayoutOrder = 1,
         Active = false,
     }, root)
-    corner(header, options.Radius or 3)
-    local headerStroke = stroke(header, theme.Stroke, 1, 1)
+    corner(header, options.Radius or 6)
+    local headerStroke = stroke(header, theme.Stroke, 0.76, 1)
 
     local hitbox = create("TextButton", {
         Name = "Hitbox",
@@ -378,17 +378,17 @@ local function createItem(container, options)
 
     function self:RefreshBackground(animated)
         local color = theme.Surface
-        local backgroundTransparency = 1
+        local backgroundTransparency = 0.26
         local borderColor = theme.Stroke
-        local borderTransparency = 1
+        local borderTransparency = 0.76
         if self._active then
             color = self._hovered and blend(theme.SurfaceActive, theme.Accent, 0.025) or theme.SurfaceActive
-            backgroundTransparency = self._hovered and 0.76 or 0.82
+            backgroundTransparency = self._hovered and 0.15 or 0.20
             borderColor = theme.Accent
-            borderTransparency = 0.72
+            borderTransparency = 0.58
         elseif self._hovered then
             color = theme.SurfaceHover
-            backgroundTransparency = 0.88
+            backgroundTransparency = 0.18
         end
         local titleColor = self._active and theme.AccentText or theme.Text
         local properties = {
@@ -453,7 +453,7 @@ local function createInlinePanel(component, name, paddingAmount)
         ClipsDescendants = true,
         Active = false,
     }, root)
-    corner(content, 5)
+    corner(content, 7)
     stroke(content, theme.Stroke, 0.78, 1)
     padding(content, pad, pad, pad, pad)
 
@@ -573,7 +573,7 @@ function Component:AddSettings(builder)
         Text = "",
         AutoButtonColor = false,
     })
-    corner(gear, 4)
+    corner(gear, 6)
     addRightControl(self, gear, 22, 99)
 
     local icon = makeIcon(gear, "settings", theme.SubText, 14)
@@ -1398,6 +1398,7 @@ function Container:AddLabel(options)
     options.Height = options.Height or (options.Description and 46 or 32)
     local component = createItem(self, options)
     component.Header.BackgroundTransparency = 1
+    component.HeaderStroke.Transparency = 1
     return finalize(self, component, options)
 end
 
@@ -1829,7 +1830,7 @@ function Window:AddCategory(options)
         Active = true,
         ZIndex = 10 + index,
     }, self.Gui)
-    local panelCorner = corner(frame, 5)
+    local panelCorner = corner(frame, 8)
     local panelStroke = stroke(frame, theme.Stroke, 0.55, 1)
     local scale = create("UIScale", { Scale = 1 }, frame)
 
@@ -1852,7 +1853,7 @@ function Window:AddCategory(options)
         Active = false,
         ZIndex = 20,
     }, header)
-    corner(headerBackground, 5)
+    corner(headerBackground, 8)
     create("Frame", {
         Name = "Divider",
         Position = UDim2.fromOffset(0, 37),
@@ -1895,9 +1896,9 @@ function Window:AddCategory(options)
     local bodyLayout = create("UIListLayout", {
         FillDirection = Enum.FillDirection.Vertical,
         SortOrder = Enum.SortOrder.LayoutOrder,
-        Padding = UDim.new(0, 1),
+        Padding = UDim.new(0, 3),
     }, body)
-    padding(body, 1, 2, 0, 4)
+    padding(body, 4, 4, 2, 6)
 
     local category = setmetatable({
         Window = self,
@@ -1931,7 +1932,7 @@ function Window:AddCategory(options)
         if not frame.Parent then
             return
         end
-        local contentHeight = bodyLayout.AbsoluteContentSize.Y + 5
+        local contentHeight = bodyLayout.AbsoluteContentSize.Y + 8 -- UIPadding: 2 top + 6 bottom
         local bodyHeight = clamp(contentHeight, 0, math.max(40, category._maxHeight - 46))
         local totalHeight = math.max(51, bodyHeight + 46)
         category._targetHeight = totalHeight

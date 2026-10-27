@@ -9,7 +9,7 @@ A self-contained Roblox Luau interface library for **five independent, draggable
 - Five separate `CanvasGroup` panels; each can be dragged independently.
 - **Local blur behind the columns only** — no fullscreen `BlurEffect`.
 - Exact critically damped drag motion with distinct pickup, movement and release states; no spring overshoot.
-- Flat 34 px rows, 46 px descriptive rows, 13 px labels and 42 px toggles.
+- Separated 34 px rows with 6 px corners, 8 px panel corners, 46 px descriptive rows and 13 px labels.
 - Inline settings push following rows down in the same column.
 - 14 Roblox-hosted Lucide mappings, with BuilderSans UI fonts.
 - Toggle, slider, dropdown, keybind, textbox, color picker, button, label, separator and notification APIs.
