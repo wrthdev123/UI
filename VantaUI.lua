@@ -1,5 +1,5 @@
 --[[
-    VantaUI 3.2.0
+    VantaUI 3.3.0
     Independent, draggable column panels for Roblox, written in Luau.
 
     Interface only: no game logic, remotes, executor APIs or external HTTP requests.
@@ -15,7 +15,7 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 
 local VantaUI = {}
-VantaUI.Version = "3.2.0"
+VantaUI.Version = "3.3.0"
 
 local MOTION = {
     Instant = TweenInfo.new(0.06, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
@@ -735,6 +735,7 @@ end
 
 local function finalize(container, component, options)
     component.Flag = options.Flag
+    component._configKey = options.Flag or ("component." .. tostring(#container.Window._components + 1))
     if options.Flag then
         container.Window._flags[options.Flag] = component
     end
@@ -2863,6 +2864,130 @@ function Window:SetFlag(flag, value)
     end
 end
 
+function Window:GetConfig()
+    local config = {}
+    for _, component in ipairs(self._components) do
+        if not component._destroyed and component.Get and component._configKey then
+            config[component._configKey] = component:Get()
+        end
+    end
+    return config
+end
+
+function Window:ApplyConfig(config)
+    assert(type(config) == "table", "[VantaUI] ApplyConfig expects a table")
+    for _, component in ipairs(self._components) do
+        local value = config[component._configKey]
+        if not component._destroyed and value ~= nil and component.Set then
+            component:Set(value)
+        end
+    end
+    return self
+end
+
+local function colorsEqual(first, second)
+    return typeof(first) == "Color3" and typeof(second) == "Color3"
+        and math.abs(first.R - second.R) < 0.0001
+        and math.abs(first.G - second.G) < 0.0001
+        and math.abs(first.B - second.B) < 0.0001
+end
+
+local function shouldPreservePickerColor(instance, gui)
+    local current = instance
+    while current and current ~= gui do
+        if current.Name == "HSVPicker" or current.Name == "Preview" then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
+end
+
+function Window:SetTheme(overrides)
+    if self._destroyed then
+        return self
+    end
+    assert(type(overrides) == "table", "[VantaUI] SetTheme expects a table")
+    if overrides.Accent ~= nil then
+        self._accent = overrides.Accent
+    end
+    for key, value in pairs(overrides) do
+        if key ~= "Accent" then
+            self._themeOverrides[key] = value
+        end
+    end
+
+    local oldTheme = {}
+    for key, value in pairs(self.Theme) do
+        oldTheme[key] = value
+    end
+    local newTheme = makeTheme({
+        Accent = self._accent,
+        Theme = self._themeOverrides,
+    })
+
+    local function mappedColor(color)
+        for key, oldColor in pairs(oldTheme) do
+            if colorsEqual(color, oldColor) then
+                return newTheme[key]
+            end
+        end
+        return nil
+    end
+
+    for _, instance in ipairs(self.Gui:GetDescendants()) do
+        if not shouldPreservePickerColor(instance, self.Gui) then
+            if instance:IsA("UIStroke") then
+                local mapped = mappedColor(instance.Color)
+                if mapped then
+                    instance.Color = mapped
+                end
+            elseif instance:IsA("GuiObject") then
+                local mapped = mappedColor(instance.BackgroundColor3)
+                if mapped then
+                    instance.BackgroundColor3 = mapped
+                end
+                if instance:IsA("TextLabel") or instance:IsA("TextButton") or instance:IsA("TextBox") then
+                    mapped = mappedColor(instance.TextColor3)
+                    if mapped then
+                        instance.TextColor3 = mapped
+                    end
+                end
+                if instance:IsA("ImageLabel") or instance:IsA("ImageButton") then
+                    mapped = mappedColor(instance.ImageColor3)
+                    if mapped then
+                        instance.ImageColor3 = mapped
+                    end
+                end
+                if instance:IsA("ScrollingFrame") then
+                    mapped = mappedColor(instance.ScrollBarImageColor3)
+                    if mapped then
+                        instance.ScrollBarImageColor3 = mapped
+                    end
+                end
+            end
+        end
+    end
+
+    -- Mutate rather than replace: all existing control closures share this table.
+    for key, value in pairs(newTheme) do
+        self.Theme[key] = value
+    end
+    return self
+end
+
+function Window:SetAccent(color)
+    return self:SetTheme({ Accent = color })
+end
+
+function Window:GetTheme()
+    local copy = {}
+    for key, value in pairs(self.Theme) do
+        copy[key] = value
+    end
+    return copy
+end
+
 function Window:SetVisible(state, instant)
     if self._destroyed then
         return self
@@ -3010,6 +3135,11 @@ function VantaUI:CreateWindow(options)
         blurOption = options.Blur -- Backward-compatible boolean/number option.
     end
     self._localBlur = blurOption ~= false and blurOption ~= 0
+    self._accent = theme.Accent
+    self._themeOverrides = {}
+    for key, value in pairs(options.Theme or {}) do
+        self._themeOverrides[key] = value
+    end
 
     createBackground(self)
     self:SetBackground(options.Background)
@@ -3119,6 +3249,339 @@ function VantaUI:CreateWindow(options)
     end)
 
     return self
+end
+
+local function trimConfigName(value)
+    return tostring(value or ""):match("^%s*(.-)%s*$")
+end
+
+function VantaUI:CreateConfigManager(target, options)
+    assert(type(target) == "table" and target.Gui, "[VantaUI] A target window is required")
+    options = options or {}
+    local manager = VantaUI:CreateWindow({
+        Name = options.Name or target.Gui.Name .. "_Configs",
+        Parent = options.Parent or target.Gui.Parent,
+        Accent = options.Accent or target.Theme.Accent,
+        ColumnWidth = options.Width or 300,
+        ColumnHeight = options.Height or 480,
+        MinColumnHeight = options.MinHeight or 0,
+        Background = false,
+        LocalBlur = options.LocalBlur ~= false,
+        ToggleKey = false,
+        Visible = false,
+        DisplayOrder = target.Gui.DisplayOrder + 2,
+    })
+    local panel = manager:AddCategory({
+        Title = options.Title or "Config Manager",
+        Icon = "utility",
+        Width = options.Width or 300,
+        Height = options.Height or 480,
+        MinHeight = 0,
+        Position = options.Position or UDim2.fromOffset(24, 104),
+    })
+
+    local configs = { Default = target:GetConfig() }
+    local order = { "Default" }
+    local selected = "Default"
+    local selector
+    local nameInput
+    local status
+
+    local function refreshSelection()
+        selector:Refresh(order, true)
+        selector:SetSilent(selected)
+    end
+
+    local function save()
+        local name = trimConfigName(nameInput:Get())
+        if name == "" then
+            name = selected
+        end
+        if name == "" then
+            status:SetTitle("Enter a config name")
+            return
+        end
+        if not configs[name] then
+            table.insert(order, name)
+        end
+        configs[name] = target:GetConfig()
+        selected = name
+        refreshSelection()
+        nameInput:SetSilent("")
+        status:SetTitle("Saved · " .. name)
+    end
+
+    local function load()
+        local config = configs[selected]
+        if not config then
+            status:SetTitle("Config not found")
+            return
+        end
+        target:ApplyConfig(config)
+        status:SetTitle("Loaded · " .. selected)
+    end
+
+    local function delete()
+        if selected == "Default" then
+            status:SetTitle("Default is protected")
+            return
+        end
+        if not configs[selected] then
+            return
+        end
+        local deleted = selected
+        configs[selected] = nil
+        for index, name in ipairs(order) do
+            if name == selected then
+                table.remove(order, index)
+                break
+            end
+        end
+        selected = "Default"
+        refreshSelection()
+        status:SetTitle("Deleted · " .. deleted)
+    end
+
+    selector = panel:AddDropdown({
+        Title = "Config",
+        Values = order,
+        Default = selected,
+        Callback = function(value)
+            selected = value
+        end,
+    })
+    nameInput = panel:AddTextbox({
+        Title = "New config name",
+        Placeholder = "Leave empty to overwrite",
+        Default = "",
+    })
+    panel:AddButton({ Title = "Save / Create", RightText = "Save", Callback = save })
+    panel:AddButton({ Title = "Load selected", RightText = "Load", Callback = load })
+    panel:AddButton({ Title = "Delete selected", RightText = "Delete", Callback = delete })
+    status = panel:AddLabel({ Title = "Default ready" })
+    panel:AddButton({
+        Title = "Close config manager",
+        RightText = "Close",
+        Callback = function()
+            manager:SetVisible(false)
+        end,
+    })
+
+    target.Gui.Destroying:Connect(function()
+        if not manager._destroyed then
+            manager:Destroy()
+        end
+    end)
+
+    local api = { Window = manager, Panel = panel, Configs = configs, Order = order }
+    function api:Show()
+        manager:SetVisible(true)
+        return self
+    end
+    function api:Hide()
+        manager:SetVisible(false)
+        return self
+    end
+    function api:Save(name)
+        if name ~= nil then
+            nameInput:SetSilent(name)
+        end
+        save()
+        return self
+    end
+    function api:Load(name)
+        if name ~= nil then
+            if not configs[name] then
+                status:SetTitle("Config not found")
+                return self
+            end
+            selected = name
+            refreshSelection()
+        end
+        load()
+        return self
+    end
+    function api:Delete(name)
+        if name ~= nil then
+            if not configs[name] then
+                return self
+            end
+            selected = name
+            refreshSelection()
+        end
+        delete()
+        return self
+    end
+    return api
+end
+
+local THEME_PRESETS = {
+    Violet = {
+        Accent = Color3.fromRGB(145, 116, 222), Column = Color3.fromRGB(22, 20, 35),
+        Header = Color3.fromRGB(25, 22, 39), Surface = Color3.fromRGB(35, 31, 50),
+        SurfaceHover = Color3.fromRGB(47, 40, 66), Inset = Color3.fromRGB(20, 18, 31),
+        Track = Color3.fromRGB(67, 61, 86), Stroke = Color3.fromRGB(86, 73, 119),
+    },
+    Lavender = {
+        Accent = Color3.fromRGB(165, 138, 228), Column = Color3.fromRGB(25, 22, 38),
+        Header = Color3.fromRGB(29, 25, 43), Surface = Color3.fromRGB(39, 33, 53),
+        SurfaceHover = Color3.fromRGB(52, 43, 71), Inset = Color3.fromRGB(22, 19, 34),
+        Track = Color3.fromRGB(70, 62, 91), Stroke = Color3.fromRGB(96, 80, 130),
+    },
+    Blue = {
+        Accent = Color3.fromRGB(90, 148, 224), Column = Color3.fromRGB(19, 24, 36),
+        Header = Color3.fromRGB(22, 28, 42), Surface = Color3.fromRGB(29, 37, 52),
+        SurfaceHover = Color3.fromRGB(38, 49, 68), Inset = Color3.fromRGB(17, 22, 34),
+        Track = Color3.fromRGB(52, 70, 94), Stroke = Color3.fromRGB(62, 88, 124),
+    },
+    Rose = {
+        Accent = Color3.fromRGB(214, 112, 150), Column = Color3.fromRGB(30, 22, 33),
+        Header = Color3.fromRGB(35, 26, 39), Surface = Color3.fromRGB(43, 31, 45),
+        SurfaceHover = Color3.fromRGB(57, 39, 59), Inset = Color3.fromRGB(25, 19, 29),
+        Track = Color3.fromRGB(82, 58, 78), Stroke = Color3.fromRGB(112, 71, 94),
+    },
+    Emerald = {
+        Accent = Color3.fromRGB(82, 181, 145), Column = Color3.fromRGB(18, 28, 28),
+        Header = Color3.fromRGB(22, 34, 33), Surface = Color3.fromRGB(28, 41, 39),
+        SurfaceHover = Color3.fromRGB(36, 54, 50), Inset = Color3.fromRGB(16, 25, 25),
+        Track = Color3.fromRGB(48, 76, 68), Stroke = Color3.fromRGB(58, 99, 86),
+    },
+}
+local THEME_PRESET_ORDER = { "Violet", "Lavender", "Blue", "Rose", "Emerald" }
+
+function VantaUI:CreateThemeEditor(target, options)
+    assert(type(target) == "table" and target.Gui, "[VantaUI] A target window is required")
+    options = options or {}
+    local editor = VantaUI:CreateWindow({
+        Name = options.Name or target.Gui.Name .. "_Theme",
+        Parent = options.Parent or target.Gui.Parent,
+        Accent = options.Accent or target.Theme.Accent,
+        ColumnWidth = options.Width or 320,
+        ColumnHeight = options.Height or 520,
+        MinColumnHeight = options.MinHeight or 0,
+        Background = false,
+        LocalBlur = options.LocalBlur ~= false,
+        ToggleKey = false,
+        Visible = false,
+        DisplayOrder = target.Gui.DisplayOrder + 3,
+    })
+    local panel = editor:AddCategory({
+        Title = options.Title or "Theme Editor",
+        Icon = "color",
+        Width = options.Width or 320,
+        Height = options.Height or 520,
+        MinHeight = 0,
+        Position = options.Position or UDim2.fromOffset(920, 104),
+    })
+
+    local accentPicker
+    local panelPicker
+    local surfacePicker
+    local strokePicker
+    local selector
+    local status
+
+    local function syncPickers(preset)
+        accentPicker:SetSilent(preset.Accent or target.Theme.Accent)
+        panelPicker:SetSilent(preset.Column or target.Theme.Column)
+        surfacePicker:SetSilent(preset.Surface or target.Theme.Surface)
+        strokePicker:SetSilent(preset.Stroke or target.Theme.Stroke)
+    end
+
+    local function applyPreset(name)
+        local preset = THEME_PRESETS[name]
+        if not preset then
+            return
+        end
+        target:SetTheme(preset)
+        syncPickers(preset)
+        status:SetTitle(name .. " applied")
+    end
+
+    selector = panel:AddDropdown({
+        Title = "Theme preset",
+        Values = THEME_PRESET_ORDER,
+        Default = "Violet",
+        Callback = applyPreset,
+    })
+    accentPicker = panel:AddColorPicker({
+        Title = "Accent",
+        Default = target.Theme.Accent,
+        Callback = function(color)
+            target:SetTheme({ Accent = color })
+            status:SetTitle("Custom accent")
+        end,
+    })
+    panelPicker = panel:AddColorPicker({
+        Title = "Panel background",
+        Default = target.Theme.Column,
+        Callback = function(color)
+            target:SetTheme({ Column = color })
+            status:SetTitle("Custom panel color")
+        end,
+    })
+    surfacePicker = panel:AddColorPicker({
+        Title = "Row surface",
+        Default = target.Theme.Surface,
+        Callback = function(color)
+            target:SetTheme({ Surface = color })
+            status:SetTitle("Custom row color")
+        end,
+    })
+    strokePicker = panel:AddColorPicker({
+        Title = "Borders",
+        Default = target.Theme.Stroke,
+        Callback = function(color)
+            target:SetTheme({ Stroke = color })
+            status:SetTitle("Custom border color")
+        end,
+    })
+    panel:AddButton({
+        Title = "Reset to Violet",
+        RightText = "Reset",
+        Callback = function()
+            selector:SetSilent("Violet")
+            applyPreset("Violet")
+        end,
+    })
+    status = panel:AddLabel({ Title = "Live theme preview" })
+    panel:AddButton({
+        Title = "Close theme editor",
+        RightText = "Close",
+        Callback = function()
+            editor:SetVisible(false)
+        end,
+    })
+
+    target.Gui.Destroying:Connect(function()
+        if not editor._destroyed then
+            editor:Destroy()
+        end
+    end)
+
+    local api = { Window = editor, Panel = panel, Presets = THEME_PRESETS }
+    function api:Show()
+        editor:SetVisible(true)
+        return self
+    end
+    function api:Hide()
+        editor:SetVisible(false)
+        return self
+    end
+    function api:Apply(preset)
+        if type(preset) == "string" then
+            if THEME_PRESETS[preset] then
+                selector:SetSilent(preset)
+                applyPreset(preset)
+            end
+        elseif type(preset) == "table" then
+            target:SetTheme(preset)
+            syncPickers(preset)
+            status:SetTitle("Custom theme applied")
+        end
+        return self
+    end
+    return api
 end
 
 --[[

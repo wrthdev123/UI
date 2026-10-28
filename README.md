@@ -1,4 +1,4 @@
-# VantaUI 3.2
+# VantaUI 3.3
 
 A self-contained Roblox Luau interface library for **five independent, draggable columns** with inline settings. The dark-violet presentation uses separated rows, thin borders, readable BuilderSans typography and genuine Lucide sprite icons — without a full-window wrapper or a vertical selected-state strip.
 
@@ -19,7 +19,8 @@ A self-contained Roblox Luau interface library for **five independent, draggable
 - Inline settings use 7 px spacing and push following rows down in the same column.
 - Roblox-hosted Lucide mappings, with BuilderSans UI fonts.
 - Toggle, slider, dropdown, keybind, textbox, color picker, button, label, separator and notification APIs.
-- Config flags, `GetFlag`, `SetFlag` and programmatic setters.
+- Named config save/load/delete and live theme editing in **two separate draggable utility windows**, outside the five-column layout.
+- Config flags, stable snapshots of flagged and unflagged controls, `GetFlag`, `SetFlag` and programmatic setters.
 - Complete cleanup of input/render connections, camera geometry and lighting effects.
 
 ## Local blur: what it does
@@ -86,7 +87,7 @@ The standalone Miscellaneous column includes a mode dropdown, particle-count sli
 3. In Roblox Studio, create a **LocalScript** in `StarterPlayer > StarterPlayerScripts`.
 4. Paste and use **Play / Play Solo**, not the server-only Run mode.
 
-The demo creates Combat, Movement, Visuals, Player and Miscellaneous columns. It includes working inline settings, controls, notifications and drag interactions.
+The demo creates Combat, Movement, Visuals, Player and Miscellaneous columns. It includes working inline settings, controls, notifications and drag interactions. Miscellaneous only opens the Config Manager and Theme Editor; neither system is embedded in a main column.
 
 A minimal standalone setup looks like this when the library is already available:
 
@@ -158,6 +159,80 @@ end)
 
 `Blur = 10` from VantaUI 2 is accepted only as a backward-compatible on/off option. It no longer creates a fullscreen blur; new code should use `LocalBlur = true` or `false`.
 
+## Separate Config Manager and Theme Editor
+
+The managers are independent, initially hidden windows. Each owns its own `ScreenGui` and draggable panel; neither is added to the main window's category layout, so the primary interface remains exactly five columns.
+
+Create them **after building the controls** so the protected `Default` config captures the initial state:
+
+```lua
+local configManager = VantaUI:CreateConfigManager(window)
+local themeEditor = VantaUI:CreateThemeEditor(window)
+
+misc:AddButton({
+    Title = "Config Manager",
+    RightText = "Open",
+    Callback = function()
+        configManager:Show()
+    end,
+})
+
+misc:AddButton({
+    Title = "Theme Editor",
+    RightText = "Open",
+    Callback = function()
+        themeEditor:Show()
+    end,
+})
+```
+
+### Named configs
+
+The Config Manager can create/overwrite named snapshots, load the selected snapshot and delete custom entries. `Default` is protected from deletion.
+
+```lua
+configManager:Save("Combat")
+configManager:Load("Combat")
+configManager:Delete("Combat")
+configManager:Hide()
+```
+
+Lower-level APIs are also available:
+
+```lua
+local snapshot = window:GetConfig()
+window:ApplyConfig(snapshot)
+window:GetFlag("combat.aura")
+window:SetFlag("combat.aura", true)
+```
+
+Snapshots include every control with a value, not only controls with an explicit `Flag`. Flagged controls use their flag as the key; other controls receive stable creation-order keys. Loading applies real component setters and invokes their callbacks. Configs are held in memory for the current session; the library does not claim disk or DataStore persistence.
+
+### Live themes
+
+The Theme Editor includes `Violet`, `Lavender`, `Blue`, `Rose` and `Emerald` presets plus HSV pickers for the accent, panel background, row surface and borders. Changes affect existing controls immediately, not only controls created later.
+
+```lua
+themeEditor:Apply("Blue")
+themeEditor:Apply({
+    Accent = Color3.fromRGB(165, 138, 228),
+    Column = Color3.fromRGB(25, 22, 38),
+})
+themeEditor:Show()
+```
+
+Equivalent target-window APIs:
+
+```lua
+window:SetTheme({ Stroke = Color3.fromRGB(96, 80, 130) })
+window:SetAccent(Color3.fromRGB(145, 116, 222))
+local theme = window:GetTheme()
+```
+
+Custom colors already chosen inside HSV pickers are preserved when a theme changes. Both utility windows support the same drag motion, viewport clamping and optional panel-local blur as the main panels. Destroying the target window also destroys its managers.
+
+Optional manager settings include `Parent`, `Name`, `Title`, `Width`, `Height`, `Position`, `Accent` and `LocalBlur`.
+
 ## Module installation
 
 If you prefer separate files:
@@ -209,6 +284,9 @@ window:Toggle()
 window:SetVisible(boolean, instant?)
 window:SetBackgroundMode("Particles")
 window:SetBackground({ Mode = "Image", Image = "rbxassetid://123456" })
+window:SetTheme({ Accent = Color3.fromRGB(165, 138, 228) })
+local snapshot = window:GetConfig()
+window:ApplyConfig(snapshot)
 window:Notify({ Title = "Saved", Content = "Done", Type = "Success" })
 window:GetFlag("combat.range")
 window:SetFlag("combat.range", 6)
@@ -222,7 +300,7 @@ local category = window:AddCategory({
     Title = "Combat",
     Icon = "combat",       -- Optional Lucide alias
     Visible = true,
-    MinHeight = 400, -- Optional per-category override
+    MinHeight = 400,       -- Optional per-category override
 })
 ```
 
@@ -363,7 +441,9 @@ The revision is checked with the official Roblox Luau compiler/interpreter and A
 - two-axis HSV picking, hue selection, hex synchronization and color callbacks;
 - notifications, transparent settings icons and background-free hover descriptions;
 - viewport clamping for dragged and programmatically positioned columns;
-- final destruction cleanup.
+- named config create/overwrite/load/delete, including unflagged controls;
+- independent Config Manager and Theme Editor windows, live theme updates and HSV color preservation;
+- final destruction cleanup, including target-owned utility windows.
 
 Mocks do **not** validate real Roblox Glass rendering, image loading or physical input. Use Studio Play mode for that final platform check.
 
