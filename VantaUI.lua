@@ -1,5 +1,5 @@
 --[[
-    VantaUI 3.3.0
+    VantaUI 3.3.1
     Independent, draggable column panels for Roblox, written in Luau.
 
     Interface only: no game logic, remotes, executor APIs or external HTTP requests.
@@ -15,7 +15,7 @@ local Lighting = game:GetService("Lighting")
 local Workspace = game:GetService("Workspace")
 
 local VantaUI = {}
-VantaUI.Version = "3.3.0"
+VantaUI.Version = "3.3.1"
 
 local MOTION = {
     Instant = TweenInfo.new(0.06, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
@@ -378,13 +378,9 @@ local function createItem(container, options)
         ZIndex = 2,
     }, header)
 
-    local left = options.LeftPadding or (options.Icon and 34 or 10)
-    local itemIcon
-    if options.Icon then
-        itemIcon = makeIcon(header, options.Icon, theme.SubText, 15)
-        itemIcon.Position = UDim2.fromOffset(9, (height - 15) * 0.5)
-        itemIcon.ZIndex = 3
-    end
+    -- Function rows are intentionally text-only. Category headers and
+    -- utility affordances keep their Lucide icons, but functions do not.
+    local left = options.LeftPadding or 10
 
     local title = makeText(header, options.Title, options.TextSize or 14, theme.Text, Enum.Font.BuilderSansMedium)
     title.Name = "Title"
@@ -428,7 +424,6 @@ local function createItem(container, options)
         Hitbox = hitbox,
         Title = title,
         Description = description,
-        Icon = itemIcon,
         Right = right,
         RightWidth = 0,
         LeftPadding = left,
@@ -730,6 +725,12 @@ function Component:Destroy()
             break
         end
     end
+    for index, item in ipairs(self.Window._motionComponents) do
+        if item == self then
+            table.remove(self.Window._motionComponents, index)
+            break
+        end
+    end
     self.Root:Destroy()
 end
 
@@ -741,6 +742,9 @@ local function finalize(container, component, options)
     end
     table.insert(container._items, component)
     table.insert(container.Window._components, component)
+    if component._updateMotion then
+        table.insert(container.Window._motionComponents, component)
+    end
     if type(options.Settings) == "function" then
         component:AddSettings(options.Settings)
     end
@@ -976,27 +980,59 @@ function Container:AddSlider(options)
         return string.format("%." .. tostring(decimals) .. "f", current) .. tostring(options.Suffix or "")
     end
 
+    local initialAlpha = (value - minimum) / (maximum - minimum)
+    local displayedAlpha = initialAlpha
+    local targetAlpha = initialAlpha
+    local alphaVelocity = 0
+    local dragging = false
+
+    local function renderAlpha(alpha)
+        fill.Size = UDim2.new(alpha, 0, 1, 0)
+        knob.Position = UDim2.new(alpha, 0, 0.5, 0)
+    end
+
     local function update(raw, animated, notify)
         local nextValue = rounded(raw)
         local changed = nextValue ~= value
         value = nextValue
-        local alpha = (value - minimum) / (maximum - minimum)
+        targetAlpha = (value - minimum) / (maximum - minimum)
         valueText.Text = formatted(value)
-        local fillSize = UDim2.new(alpha, 0, 1, 0)
-        local knobPosition = UDim2.new(alpha, 0, 0.5, 0)
-        if animated == false then
-            fill.Size = fillSize
-            knob.Position = knobPosition
-        else
-            tween(fill, MOTION.Fast, { Size = fillSize })
-            tween(knob, MOTION.Fast, { Position = knobPosition })
+        if animated == false or not self.Window._visible then
+            displayedAlpha = targetAlpha
+            alphaVelocity = 0
+            renderAlpha(displayedAlpha)
         end
         if notify and changed then
             safeCallback(options.Callback, value)
         end
     end
 
-    local dragging = false
+    -- Input updates the numeric value immediately, while a frame-independent
+    -- critically damped spring smooths the fill and knob. Unlike restarting a
+    -- tween for every mouse event, this retains velocity and never overshoots.
+    component._updateMotion = function(deltaTime)
+        if not component.Root.Parent then
+            return
+        end
+        local offset = displayedAlpha - targetAlpha
+        if math.abs(offset) < 0.00005 and math.abs(alphaVelocity) < 0.0005 then
+            if displayedAlpha ~= targetAlpha then
+                displayedAlpha = targetAlpha
+                renderAlpha(displayedAlpha)
+            end
+            alphaVelocity = 0
+            return
+        end
+        local frequency = dragging and 32 or 24
+        local stepTime = math.min(deltaTime, 0.1)
+        local decay = math.exp(-frequency * stepTime)
+        local coefficient = alphaVelocity + frequency * offset
+        local nextOffset = (offset + coefficient * stepTime) * decay
+        alphaVelocity = (alphaVelocity - frequency * coefficient * stepTime) * decay
+        displayedAlpha = clamp(targetAlpha + nextOffset, 0, 1)
+        renderAlpha(displayedAlpha)
+    end
+
     local hovering = false
     local dragInput
 
@@ -1020,7 +1056,7 @@ function Container:AddSlider(options)
             return
         end
         local alpha = clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-        update(minimum + (maximum - minimum) * alpha, false, true)
+        update(minimum + (maximum - minimum) * alpha, true, true)
     end
 
     listen(self.Window, hitbox.InputBegan, function(input)
@@ -3007,6 +3043,11 @@ function Window:SetVisible(state, instant)
     for _, category in ipairs(self.Categories) do
         category:SetVisible(state, instant)
     end
+    for _, utility in ipairs(self._utilityWindows) do
+        if not utility._destroyed then
+            utility:SetVisible(state and utility._showWithParent or false, instant)
+        end
+    end
 
     if state and self._localBlur then
         if not self._depthOfField or not self._depthOfField.Parent then
@@ -3111,6 +3152,8 @@ function VantaUI:CreateWindow(options)
         Theme = theme,
         Categories = {},
         _components = {},
+        _motionComponents = {},
+        _utilityWindows = {},
         _flags = {},
         _connections = {},
         _notifications = {},
@@ -3222,6 +3265,11 @@ function VantaUI:CreateWindow(options)
             updateCategoryMotion(category, deltaTime)
             updateCategoryBlur(category)
         end
+        for _, component in ipairs(self._motionComponents) do
+            if not component._destroyed then
+                component._updateMotion(deltaTime)
+            end
+        end
     end)
 
     local toggleKey = Enum.KeyCode.RightShift
@@ -3251,6 +3299,21 @@ function VantaUI:CreateWindow(options)
     return self
 end
 
+local function attachUtilityWindow(target, utility, showByDefault)
+    utility._parentWindow = target
+    utility._showWithParent = showByDefault
+    target._utilityWindows = target._utilityWindows or {}
+    table.insert(target._utilityWindows, utility)
+    target.Gui.Destroying:Connect(function()
+        if not utility._destroyed then
+            utility:Destroy()
+        end
+    end)
+    if target._visible and showByDefault then
+        utility:SetVisible(true)
+    end
+end
+
 local function trimConfigName(value)
     return tostring(value or ""):match("^%s*(.-)%s*$")
 end
@@ -3268,7 +3331,7 @@ function VantaUI:CreateConfigManager(target, options)
         Background = false,
         LocalBlur = options.LocalBlur ~= false,
         ToggleKey = false,
-        Visible = false,
+        Visible = false, -- Parent-driven; attached after the controls exist.
         DisplayOrder = target.Gui.DisplayOrder + 2,
     })
     local panel = manager:AddCategory({
@@ -3363,22 +3426,23 @@ function VantaUI:CreateConfigManager(target, options)
         Title = "Close config manager",
         RightText = "Close",
         Callback = function()
+            manager._showWithParent = false
             manager:SetVisible(false)
         end,
     })
 
-    target.Gui.Destroying:Connect(function()
-        if not manager._destroyed then
-            manager:Destroy()
-        end
-    end)
+    attachUtilityWindow(target, manager, options.Visible ~= false)
 
     local api = { Window = manager, Panel = panel, Configs = configs, Order = order }
     function api:Show()
-        manager:SetVisible(true)
+        manager._showWithParent = true
+        if target._visible then
+            manager:SetVisible(true)
+        end
         return self
     end
     function api:Hide()
+        manager._showWithParent = false
         manager:SetVisible(false)
         return self
     end
@@ -3462,7 +3526,7 @@ function VantaUI:CreateThemeEditor(target, options)
         Background = false,
         LocalBlur = options.LocalBlur ~= false,
         ToggleKey = false,
-        Visible = false,
+        Visible = false, -- Parent-driven; attached after the controls exist.
         DisplayOrder = target.Gui.DisplayOrder + 3,
     })
     local panel = editor:AddCategory({
@@ -3549,22 +3613,23 @@ function VantaUI:CreateThemeEditor(target, options)
         Title = "Close theme editor",
         RightText = "Close",
         Callback = function()
+            editor._showWithParent = false
             editor:SetVisible(false)
         end,
     })
 
-    target.Gui.Destroying:Connect(function()
-        if not editor._destroyed then
-            editor:Destroy()
-        end
-    end)
+    attachUtilityWindow(target, editor, options.Visible ~= false)
 
     local api = { Window = editor, Panel = panel, Presets = THEME_PRESETS }
     function api:Show()
-        editor:SetVisible(true)
+        editor._showWithParent = true
+        if target._visible then
+            editor:SetVisible(true)
+        end
         return self
     end
     function api:Hide()
+        editor._showWithParent = false
         editor:SetVisible(false)
         return self
     end

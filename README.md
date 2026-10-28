@@ -1,4 +1,4 @@
-# VantaUI 3.3
+# VantaUI 3.3.1
 
 A self-contained Roblox Luau interface library for **five independent, draggable columns** with inline settings. The dark-violet presentation uses separated rows, thin borders, readable BuilderSans typography and genuine Lucide sprite icons — without a full-window wrapper or a vertical selected-state strip.
 
@@ -13,11 +13,11 @@ A self-contained Roblox Luau interface library for **five independent, draggable
 - Separated rows with 6 px corners and panels with 8 px corners.
 - Configurable `Parallax`, linked bouncing `Particles`, `Image` or `None` background modes.
 - Full HSV color picker with a saturation/value pad, hue bar and hex readout.
-- Compact 46 px sliders with drag glow and direct input response.
+- Compact 46 px sliders with critically damped fill/knob motion, drag glow and immediate values/callbacks.
 - Hover descriptions use 17 px bottom-screen text without a background card.
 - Columns are clamped to the viewport during drag, programmatic movement and resize.
 - Inline settings use 7 px spacing and push following rows down in the same column.
-- Roblox-hosted Lucide mappings, with BuilderSans UI fonts.
+- Roblox-hosted Lucide category/utility icons, BuilderSans UI fonts and text-only function rows.
 - Toggle, slider, dropdown, keybind, textbox, color picker, button, label, separator and notification APIs.
 - Named config save/load/delete and live theme editing in **two separate draggable utility windows**, outside the five-column layout.
 - Config flags, stable snapshots of flagged and unflagged controls, `GetFlag`, `SetFlag` and programmatic setters.
@@ -124,7 +124,6 @@ local misc = window:AddCategory({ Title = "Miscellaneous", Icon = "misc" })
 local aura = combat:AddToggle({
     Title = "Kill Aura",
     Description = "Use the gear for inline settings",
-    Icon = "combat",
     Default = true,
     Flag = "combat.aura",
     Callback = function(enabled)
@@ -161,7 +160,7 @@ end)
 
 ## Separate Config Manager and Theme Editor
 
-The managers are independent, initially hidden windows. Each owns its own `ScreenGui` and draggable panel; neither is added to the main window's category layout, so the primary interface remains exactly five columns.
+The managers are independent windows shown together with the target UI by default. Each owns its own `ScreenGui` and draggable panel; neither is added to the main window's category layout, so the primary interface remains exactly five columns. Hiding the main UI hides both managers; showing it restores the managers that were open. A manager closed with its own Close button stays closed until explicitly reopened.
 
 Create them **after building the controls** so the protected `Default` config captures the initial state:
 
@@ -231,7 +230,7 @@ local theme = window:GetTheme()
 
 Custom colors already chosen inside HSV pickers are preserved when a theme changes. Both utility windows support the same drag motion, viewport clamping and optional panel-local blur as the main panels. Destroying the target window also destroys its managers.
 
-Optional manager settings include `Parent`, `Name`, `Title`, `Width`, `Height`, `Position`, `Accent` and `LocalBlur`.
+Optional manager settings include `Parent`, `Name`, `Title`, `Width`, `Height`, `Position`, `Accent`, `LocalBlur` and `Visible`. Set `Visible = false` to keep a manager closed at startup; `Show()` marks it to open with the target UI.
 
 ## Module installation
 
@@ -312,7 +311,6 @@ Methods: `SetTitle`, `SetVisible`, `SetPosition`, `GetRow`. Panels are direct ch
 local toggle = category:AddToggle({
     Title = "Auto Sprint",
     Description = "Shown at the bottom on hover",
-    Icon = "movement", -- Optional Lucide icon
     Default = false,
     Flag = "movement.sprint",
     RightText = "Optional hint",
@@ -410,7 +408,7 @@ Available aliases:
 | Controls | `settings`, `gear`, `utility`, `sliders`, `camera`, `color`, `palette` |
 | Chevrons | `chevron-right`, `chevron-down` |
 
-Icons use Roblox-hosted Lucide sprite sheets and sprite offsets. They are not hand-drawn approximations. Icons are rendered from Roblox-hosted sprite sheets with source tile offsets; VantaUI does not fetch SVG files.
+Icons use Roblox-hosted Lucide sprite sheets and sprite offsets. They are not hand-drawn approximations. Icons are rendered from Roblox-hosted sprite sheets with source tile offsets; VantaUI does not fetch SVG files. Function rows are deliberately text-only; category headers, settings gears and dropdown chevrons retain their utility icons.
 
 ## Motion and lifecycle
 
@@ -422,6 +420,8 @@ Icons use Roblox-hosted Lucide sprite sheets and sprite offsets. They are not ha
 - Overlapping tweens are cancelled per property, preventing hover and release animations from fighting each other.
 - Hover descriptions and background modes crossfade instead of appearing abruptly.
 - Drag targets and rendered panel positions are clamped inside an 8 px screen margin.
+- Slider input updates values and callbacks immediately while fill and knob use a frame-independent critically damped spring. Rapid input retains velocity instead of restarting a tween every frame; `Set(value, true)` still snaps programmatically.
+- Config Manager and Theme Editor are visible with the target by default, hide with it and remember an independent Close across later visibility toggles.
 - Rows do not create ripple objects, press-scale containers or toggle pulses.
 - `Destroy()` disconnects listeners and removes notifications, Glass models and DepthOfField effects.
 
@@ -441,6 +441,9 @@ The revision is checked with the official Roblox Luau compiler/interpreter and A
 - two-axis HSV picking, hue selection, hex synchronization and color callbacks;
 - notifications, transparent settings icons and background-free hover descriptions;
 - viewport clamping for dragged and programmatically positioned columns;
+- default/show/hide synchronization and independent Close behavior for both utility windows;
+- text-only function rows with retained category/utility icons;
+- immediate slider values with interpolated intermediate frames, exact settling and instant opt-out;
 - named config create/overwrite/load/delete, including unflagged controls;
 - independent Config Manager and Theme Editor windows, live theme updates and HSV color preservation;
 - final destruction cleanup, including target-owned utility windows.
